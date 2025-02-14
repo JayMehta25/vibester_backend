@@ -1,0 +1,845 @@
+{
+  "settings": {
+    "languages": [
+      "en"
+    ],
+    "forceNER": true,
+    "tag": "nlp",
+    "threshold": 0.5,
+    "autoLoad": true,
+    "autoSave": true,
+    "modelFileName": "model.nlp",
+    "executeActionsBeforeAnswers": false,
+    "calculateSentiment": true
+  },
+  "nluManager": {
+    "settings": {
+      "tag": "nlu-manager"
+    },
+    "locales": [
+      "en"
+    ],
+    "languageNames": {},
+    "domainManagers": {
+      "en": {
+        "settings": {
+          "locale": "en",
+          "trainByDomain": false,
+          "tag": "domain-manager-en",
+          "nluByDomain": {
+            "default": {
+              "className": "NeuralNlu",
+              "settings": {}
+            }
+          },
+          "useStemDict": true
+        },
+        "stemDict": {
+          "hello": {
+            "intent": "greeting.hello",
+            "domain": "default"
+          },
+          "hi": {
+            "intent": "greeting.hello",
+            "domain": "default"
+          },
+          "hey": {
+            "intent": "greeting.hello",
+            "domain": "default"
+          },
+          "are,how,you": {
+            "intent": "bot.feelings",
+            "domain": "default"
+          },
+          "go,how,is,it": {
+            "intent": "bot.feelings",
+            "domain": "default"
+          },
+          "is,this,what": {
+            "intent": "app.purpose",
+            "domain": "default"
+          },
+          "do,featur,have,what,you": {
+            "intent": "app.features",
+            "domain": "default"
+          },
+          "can,do,what,you": {
+            "intent": "app.features",
+            "domain": "default"
+          },
+          "chat,is,my,secur": {
+            "intent": "app.privacy",
+            "domain": "default"
+          },
+          "privat": {
+            "intent": "app.privacy",
+            "domain": "default"
+          },
+          "do,how,i,this,use": {
+            "intent": "app.howto",
+            "domain": "default"
+          },
+          "how,start,to": {
+            "intent": "app.howto",
+            "domain": "default"
+          },
+          "login": {
+            "intent": "app.login",
+            "domain": "default"
+          },
+          "logout": {
+            "intent": "app.logout",
+            "domain": "default"
+          },
+          "help": {
+            "intent": "app.help",
+            "domain": "default"
+          }
+        },
+        "intentDict": {
+          "greeting.hello": "default",
+          "bot.feelings": "default",
+          "app.purpose": "default",
+          "app.features": "default",
+          "app.privacy": "default",
+          "app.howto": "default",
+          "app.login": "default",
+          "app.logout": "default",
+          "app.help": "default"
+        },
+        "sentences": [
+          {
+            "domain": "default",
+            "utterance": "hello",
+            "intent": "greeting.hello"
+          },
+          {
+            "domain": "default",
+            "utterance": "hi",
+            "intent": "greeting.hello"
+          },
+          {
+            "domain": "default",
+            "utterance": "hey",
+            "intent": "greeting.hello"
+          },
+          {
+            "domain": "default",
+            "utterance": "how are you",
+            "intent": "bot.feelings"
+          },
+          {
+            "domain": "default",
+            "utterance": "how's it going",
+            "intent": "bot.feelings"
+          },
+          {
+            "domain": "default",
+            "utterance": "what is this",
+            "intent": "app.purpose"
+          },
+          {
+            "domain": "default",
+            "utterance": "what's this",
+            "intent": "app.purpose"
+          },
+          {
+            "domain": "default",
+            "utterance": "what features do you have",
+            "intent": "app.features"
+          },
+          {
+            "domain": "default",
+            "utterance": "what can you do",
+            "intent": "app.features"
+          },
+          {
+            "domain": "default",
+            "utterance": "is my chat secure",
+            "intent": "app.privacy"
+          },
+          {
+            "domain": "default",
+            "utterance": "private",
+            "intent": "app.privacy"
+          },
+          {
+            "domain": "default",
+            "utterance": "how do i use this",
+            "intent": "app.howto"
+          },
+          {
+            "domain": "default",
+            "utterance": "how to start",
+            "intent": "app.howto"
+          },
+          {
+            "domain": "default",
+            "utterance": "login",
+            "intent": "app.login"
+          },
+          {
+            "domain": "default",
+            "utterance": "logout",
+            "intent": "app.logout"
+          },
+          {
+            "domain": "default",
+            "utterance": "help",
+            "intent": "app.help"
+          }
+        ],
+        "domains": {
+          "master_domain": {
+            "settings": {
+              "locale": "en",
+              "tag": "nlu-en",
+              "keepStopwords": true,
+              "nonefeatureValue": 1,
+              "nonedeltaMultiplier": 1.2,
+              "spellCheck": false,
+              "spellCheckDistance": 1,
+              "filterZeros": true,
+              "log": true
+            },
+            "features": {
+              "hello": 1,
+              "hi": 1,
+              "hey": 1,
+              "how": 1,
+              "are": 1,
+              "you": 1,
+              "is": 1,
+              "it": 1,
+              "go": 1,
+              "what": 1,
+              "this": 1,
+              "featur": 1,
+              "do": 1,
+              "have": 1,
+              "can": 1,
+              "my": 1,
+              "chat": 1,
+              "secur": 1,
+              "privat": 1,
+              "i": 1,
+              "use": 1,
+              "to": 1,
+              "start": 1,
+              "login": 1,
+              "logout": 1,
+              "help": 1
+            },
+            "intents": {
+              "greeting.hello": 1,
+              "bot.feelings": 1,
+              "app.purpose": 1,
+              "app.features": 1,
+              "app.privacy": 1,
+              "app.howto": 1,
+              "app.login": 1,
+              "app.logout": 1,
+              "app.help": 1
+            },
+            "intentFeatures": {
+              "greeting.hello": {
+                "hello": 1,
+                "hi": 1,
+                "hey": 1
+              },
+              "bot.feelings": {
+                "how": 1,
+                "are": 1,
+                "you": 1,
+                "is": 1,
+                "it": 1,
+                "go": 1
+              },
+              "app.purpose": {
+                "what": 1,
+                "is": 1,
+                "this": 1
+              },
+              "app.features": {
+                "what": 1,
+                "featur": 1,
+                "do": 1,
+                "you": 1,
+                "have": 1,
+                "can": 1
+              },
+              "app.privacy": {
+                "is": 1,
+                "my": 1,
+                "chat": 1,
+                "secur": 1,
+                "privat": 1
+              },
+              "app.howto": {
+                "how": 1,
+                "do": 1,
+                "i": 1,
+                "use": 1,
+                "this": 1,
+                "to": 1,
+                "start": 1
+              },
+              "app.login": {
+                "login": 1
+              },
+              "app.logout": {
+                "logout": 1
+              },
+              "app.help": {
+                "help": 1
+              }
+            },
+            "featuresToIntent": {
+              "hello": [
+                "greeting.hello"
+              ],
+              "hi": [
+                "greeting.hello"
+              ],
+              "hey": [
+                "greeting.hello"
+              ],
+              "how": [
+                "bot.feelings",
+                "app.howto"
+              ],
+              "are": [
+                "bot.feelings"
+              ],
+              "you": [
+                "bot.feelings",
+                "app.features"
+              ],
+              "is": [
+                "bot.feelings",
+                "app.purpose",
+                "app.privacy"
+              ],
+              "it": [
+                "bot.feelings"
+              ],
+              "go": [
+                "bot.feelings"
+              ],
+              "what": [
+                "app.purpose",
+                "app.features"
+              ],
+              "this": [
+                "app.purpose",
+                "app.howto"
+              ],
+              "featur": [
+                "app.features"
+              ],
+              "do": [
+                "app.features",
+                "app.howto"
+              ],
+              "have": [
+                "app.features"
+              ],
+              "can": [
+                "app.features"
+              ],
+              "my": [
+                "app.privacy"
+              ],
+              "chat": [
+                "app.privacy"
+              ],
+              "secur": [
+                "app.privacy"
+              ],
+              "privat": [
+                "app.privacy"
+              ],
+              "i": [
+                "app.howto"
+              ],
+              "use": [
+                "app.howto"
+              ],
+              "to": [
+                "app.howto"
+              ],
+              "start": [
+                "app.howto"
+              ],
+              "login": [
+                "app.login"
+              ],
+              "logout": [
+                "app.logout"
+              ],
+              "help": [
+                "app.help"
+              ]
+            },
+            "neuralNetwork": {
+              "settings": {
+                "locale": "en",
+                "tag": "nlu-en",
+                "keepStopwords": true,
+                "nonefeatureValue": 1,
+                "nonedeltaMultiplier": 1.2,
+                "spellCheck": false,
+                "spellCheckDistance": 1,
+                "filterZeros": true,
+                "log": true
+              },
+              "features": [
+                "hello",
+                "hi",
+                "hey",
+                "how",
+                "are",
+                "you",
+                "is",
+                "it",
+                "go",
+                "what",
+                "this",
+                "featur",
+                "do",
+                "have",
+                "can",
+                "my",
+                "chat",
+                "secur",
+                "privat",
+                "i",
+                "use",
+                "to",
+                "start",
+                "login",
+                "logout",
+                "help"
+              ],
+              "intents": [
+                "greeting.hello",
+                "bot.feelings",
+                "app.purpose",
+                "app.features",
+                "app.privacy",
+                "app.howto",
+                "app.login",
+                "app.logout",
+                "app.help"
+              ],
+              "perceptrons": [
+                [
+                  9.807428359985352,
+                  9.801230430603027,
+                  9.75369930267334,
+                  -2.314667224884033,
+                  -0.7343295216560364,
+                  -1.4922648668289185,
+                  -1.9678326845169067,
+                  -0.37851667404174805,
+                  -0.37851667404174805,
+                  -1.5127124786376953,
+                  -0.9415503144264221,
+                  -0.3109273612499237,
+                  -0.9272862672805786,
+                  -0.3109273612499237,
+                  -0.42306873202323914,
+                  -0.7984405159950256,
+                  -0.7984405159950256,
+                  -0.7984405159950256,
+                  -4.110569477081299,
+                  -0.16879786550998688,
+                  -0.16879786550998688,
+                  -0.987626314163208,
+                  -0.987626314163208,
+                  -4.080471992492676,
+                  -4.052554607391357,
+                  -4.02390193939209,
+                  4.2298853124967195
+                ],
+                [
+                  -0.256130188703537,
+                  -0.25525137782096863,
+                  -0.25444358587265015,
+                  4.9847540855407715,
+                  5.000816345214844,
+                  4.03969144821167,
+                  1.9447307586669922,
+                  3.5503792762756348,
+                  3.5503792762756348,
+                  -1.766276478767395,
+                  -1.7255388498306274,
+                  -0.34157034754753113,
+                  -1.9092705249786377,
+                  -0.34157034754753113,
+                  -0.6185895204544067,
+                  -0.7784753441810608,
+                  -0.7784753441810608,
+                  -0.7784753441810608,
+                  -0.3461722433567047,
+                  -0.9191963076591492,
+                  -0.9191963076591492,
+                  -2.6190192699432373,
+                  -2.6190192699432373,
+                  -0.26488035917282104,
+                  -0.26113906502723694,
+                  -0.2581035792827606,
+                  0.25555871576213707
+                ],
+                [
+                  -0.15754248201847076,
+                  -0.15656621754169464,
+                  -0.1561734825372696,
+                  -1.8877357244491577,
+                  -0.0038223490118980408,
+                  -1.5993865728378296,
+                  3.876279592514038,
+                  -1.0726763010025024,
+                  -1.0726763010025024,
+                  4.704372882843018,
+                  5.548556804656982,
+                  -0.6232020854949951,
+                  -2.3397560119628906,
+                  -0.6232020854949951,
+                  -0.9222052097320557,
+                  -1.3450381755828857,
+                  -1.3450381755828857,
+                  -1.3450381755828857,
+                  -0.18712541460990906,
+                  -0.7439048886299133,
+                  -0.7439048886299133,
+                  -0.03750860318541527,
+                  -0.03750860318541527,
+                  -0.16420547664165497,
+                  -0.16205155849456787,
+                  -0.15958824753761292,
+                  0.15648944218548613
+                ],
+                [
+                  -0.15971525013446808,
+                  -0.1645963191986084,
+                  -0.15881049633026123,
+                  -2.0762059688568115,
+                  -1.3458092212677002,
+                  3.4628396034240723,
+                  -1.4761977195739746,
+                  -0.007007273845374584,
+                  -0.007007273845374584,
+                  3.4787867069244385,
+                  -1.962238073348999,
+                  1.6060521602630615,
+                  4.176382541656494,
+                  1.6060521602630615,
+                  3.202737331390381,
+                  -0.10374423861503601,
+                  -0.10374423861503601,
+                  -0.10374423861503601,
+                  -0.210770845413208,
+                  -0.5573512315750122,
+                  -0.5573512315750122,
+                  -0.05207391455769539,
+                  -0.05207391455769539,
+                  -0.1791657954454422,
+                  -0.17248602211475372,
+                  -0.16605281829833984,
+                  -0.04004618778938641
+                ],
+                [
+                  -1.5943259000778198,
+                  -1.5838130712509155,
+                  -1.5730111598968506,
+                  -1.524279236793518,
+                  -0.14973615109920502,
+                  -0.2481965273618698,
+                  1.4776101112365723,
+                  -0.8131944537162781,
+                  -0.8131944537162781,
+                  -1.5116803646087646,
+                  -1.6175702810287476,
+                  -0.0451480895280838,
+                  -0.27014634013175964,
+                  -0.0451480895280838,
+                  -0.022686226293444633,
+                  3.719085216522217,
+                  3.719085216522217,
+                  3.719085216522217,
+                  12.259529113769531,
+                  -0.14301303029060364,
+                  -0.14301303029060364,
+                  -0.31392768025398254,
+                  -0.31392768025398254,
+                  -1.6283341646194458,
+                  -1.6194477081298828,
+                  -1.610233187675476,
+                  1.6625460956092641
+                ],
+                [
+                  -0.3791002929210663,
+                  -0.3686358332633972,
+                  -0.3622385859489441,
+                  4.1641082763671875,
+                  -2.061103105545044,
+                  -2.4206316471099854,
+                  -1.8395212888717651,
+                  -1.328529715538025,
+                  -1.328529715538025,
+                  -0.8384824991226196,
+                  2.175821304321289,
+                  -0.1361430287361145,
+                  2.3031060695648193,
+                  -0.1361430287361145,
+                  -0.16174635291099548,
+                  -0.015239973552525043,
+                  -0.015239973552525043,
+                  -0.015239973552525043,
+                  -0.31397271156311035,
+                  2.6626343727111816,
+                  2.6626343727111816,
+                  4.901815414428711,
+                  4.901815414428711,
+                  -0.4089362621307373,
+                  -0.3968155086040497,
+                  -0.38501957058906555,
+                  0.31745942553275663
+                ],
+                [
+                  -1.3588935136795044,
+                  -1.3488327264785767,
+                  -1.3385339975357056,
+                  -0.7351270914077759,
+                  -0.2268027812242508,
+                  -0.4739210307598114,
+                  -0.625624418258667,
+                  -0.10542432963848114,
+                  -0.10542432963848114,
+                  -0.4909340739250183,
+                  -0.2983062267303467,
+                  -0.09385337680578232,
+                  -0.29895007610321045,
+                  -0.09385337680578232,
+                  -0.1499556303024292,
+                  -0.2626827657222748,
+                  -0.2626827657222748,
+                  -0.2626827657222748,
+                  -1.3245583772659302,
+                  -0.05017261952161789,
+                  -0.05017261952161789,
+                  -0.3359854817390442,
+                  -0.3359854817390442,
+                  12.466276168823242,
+                  -1.3831055164337158,
+                  -1.3742129802703857,
+                  1.4244141832438575
+                ],
+                [
+                  -1.3683804273605347,
+                  -1.3585748672485352,
+                  -1.3485193252563477,
+                  -0.7436476349830627,
+                  -0.23039022088050842,
+                  -0.47870996594429016,
+                  -0.6289381980895996,
+                  -0.10943036526441574,
+                  -0.10943036526441574,
+                  -0.49025291204452515,
+                  -0.29892462491989136,
+                  -0.09498777985572815,
+                  -0.30116501450538635,
+                  -0.09498777985572815,
+                  -0.1474905163049698,
+                  -0.26288044452667236,
+                  -0.26288044452667236,
+                  -0.26288044452667236,
+                  -1.3349719047546387,
+                  -0.05192301422357559,
+                  -0.05192301422357559,
+                  -0.3341912031173706,
+                  -0.3341912031173706,
+                  -1.3226375579833984,
+                  12.466612815856934,
+                  -1.3827754259109497,
+                  1.426351905186088
+                ],
+                [
+                  -1.3774595260620117,
+                  -1.3679226636886597,
+                  -1.358123779296875,
+                  -0.752482533454895,
+                  -0.23389257490634918,
+                  -0.48344892263412476,
+                  -0.6336827278137207,
+                  -0.11358644813299179,
+                  -0.11358644813299179,
+                  -0.4907890558242798,
+                  -0.301143079996109,
+                  -0.09814462810754776,
+                  -0.30285051465034485,
+                  -0.09814462810754776,
+                  -0.144341379404068,
+                  -0.26255926489830017,
+                  -0.26255926489830017,
+                  -0.26255926489830017,
+                  -1.3450077772140503,
+                  -0.05373206362128258,
+                  -0.05373206362128258,
+                  -0.3319774270057678,
+                  -0.3319774270057678,
+                  -1.3330262899398804,
+                  -1.3221561908721924,
+                  12.467087745666504,
+                  1.4277962999446516
+                ]
+              ]
+            }
+          }
+        }
+      }
+    },
+    "intentDomains": {},
+    "extraSentences": [
+      [
+        "en",
+        "hello"
+      ],
+      [
+        "en",
+        "hi"
+      ],
+      [
+        "en",
+        "hey"
+      ],
+      [
+        "en",
+        "how are you"
+      ],
+      [
+        "en",
+        "how's it going"
+      ],
+      [
+        "en",
+        "what is this"
+      ],
+      [
+        "en",
+        "what's this"
+      ],
+      [
+        "en",
+        "what features do you have"
+      ],
+      [
+        "en",
+        "what can you do"
+      ],
+      [
+        "en",
+        "is my chat secure"
+      ],
+      [
+        "en",
+        "private"
+      ],
+      [
+        "en",
+        "how do i use this"
+      ],
+      [
+        "en",
+        "how to start"
+      ],
+      [
+        "en",
+        "login"
+      ],
+      [
+        "en",
+        "logout"
+      ],
+      [
+        "en",
+        "help"
+      ]
+    ]
+  },
+  "ner": {
+    "settings": {
+      "tag": "ner",
+      "entityPreffix": "%",
+      "entitySuffix": "%"
+    },
+    "rules": {}
+  },
+  "nlgManager": {
+    "settings": {
+      "tag": "nlg-manager"
+    },
+    "responses": {
+      "en": {
+        "greeting.hello": [
+          {
+            "answer": "Hello! How can I help you today?"
+          }
+        ],
+        "bot.feelings": [
+          {
+            "answer": "I'm just a bot, but I'm here to assist you!"
+          }
+        ],
+        "app.purpose": [
+          {
+            "answer": "ChatRouletteX connects you with others via private chat rooms and real-time messaging."
+          }
+        ],
+        "app.features": [
+          {
+            "answer": "Our app offers real-time messaging, voice chats, customizable themes, and more!"
+          }
+        ],
+        "app.privacy": [
+          {
+            "answer": "Your privacy is our priority. All chats remain secure and confidential."
+          }
+        ],
+        "app.howto": [
+          {
+            "answer": "Getting started is easy! Click on 'Chat Now' to start chatting or create/join a private room."
+          }
+        ],
+        "app.login": [
+          {
+            "answer": "Simply enter your username on the login page. No complicated registration needed!"
+          }
+        ],
+        "app.logout": [
+          {
+            "answer": "To log out, click the logout button in the navigation bar."
+          }
+        ],
+        "app.help": [
+          {
+            "answer": "I'm here to help! What do you need assistance with?"
+          }
+        ],
+        "None": [
+          {
+            "answer": "I'm not sure I understand. Could you please rephrase your question?"
+          }
+        ]
+      }
+    }
+  },
+  "actionManager": {
+    "settings": {
+      "tag": "action-manager"
+    },
+    "actions": {}
+  },
+  "slotManager": {}
+}
