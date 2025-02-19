@@ -62,7 +62,10 @@ app.post("/upload", upload.single("file"), (req, res) => {
   }
   // Construct the URL to access the uploaded file.
   const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
-  res.json({ url: fileUrl });
+  const fileType = req.file.mimetype; // Get the file type (e.g., image, video, pdf, etc.)
+
+  // Return the file URL and type to the client
+  res.json({ url: fileUrl, type: fileType });
 });
 
 // =====================
@@ -70,20 +73,109 @@ app.post("/upload", upload.single("file"), (req, res) => {
 // =====================
 const manager = new NlpManager({ languages: ["en"], forceNER: true });
 
-// Add training data...
+// Add expanded training data...
+// Add relevant variations to the training data for the application context
+
+// Greetings
 manager.addDocument("en", "hello", "greeting.hello");
 manager.addDocument("en", "hi", "greeting.hello");
 manager.addDocument("en", "hey", "greeting.hello");
-// ... (other training data and answers)
-manager.addAnswer("en", "greeting.hello", "Hello! How can I help you today?");
-manager.addAnswer("en", "None", "I'm not sure I understand. Could you please rephrase your question?");
+manager.addDocument("en", "good morning", "greeting.morning");
+manager.addDocument("en", "good afternoon", "greeting.afternoon");
+manager.addDocument("en", "good evening", "greeting.evening");
+manager.addDocument("en", "how are you?", "greeting.howAreYou");
+manager.addDocument("en", "how's it going?", "greeting.howAreYou");
+manager.addDocument("en", "what's up?", "greeting.howAreYou");
+manager.addDocument("en", "how are you doing?", "greeting.howAreYou");
+manager.addDocument("en", "what's going on?", "greeting.howAreYou");
+manager.addDocument("en", "how do you do?", "greeting.howAreYou");
 
-// Train the NLP model (runs on server start)
+// Responses to "how are you?"
+manager.addDocument("en", "I'm good", "response.howAreYouGood");
+manager.addDocument("en", "I'm doing well", "response.howAreYouGood");
+manager.addDocument("en", "I'm fine", "response.howAreYouGood");
+manager.addDocument("en", "I'm great", "response.howAreYouGood");
+manager.addDocument("en", "I'm doing okay", "response.howAreYouGood");
+manager.addDocument("en", "I'm alright", "response.howAreYouGood");
+manager.addDocument("en", "I'm feeling good", "response.howAreYouGood");
+manager.addDocument("en", "I'm feeling great", "response.howAreYouGood");
+
+// Asking about the bot
+manager.addDocument("en", "what is your name?", "askName");
+manager.addDocument("en", "who are you?", "askName");
+manager.addDocument("en", "what do you go by?", "askName");
+manager.addDocument("en", "what should I call you?", "askName");
+manager.addDocument("en", "who am I speaking to?", "askName");
+manager.addDocument("en", "tell me your name", "askName");
+manager.addDocument("en", "what are you called?", "askName");
+
+// Asking what the bot does
+manager.addDocument("en", "what do you do?", "askWhatDoYouDo");
+manager.addDocument("en", "what can you do?", "askWhatDoYouDo");
+manager.addDocument("en", "what are your capabilities?", "askWhatDoYouDo");
+manager.addDocument("en", "what's your job?", "askWhatDoYouDo");
+manager.addDocument("en", "what are you capable of?", "askWhatDoYouDo");
+manager.addDocument("en", "what's your function?", "askWhatDoYouDo");
+
+// Room and chat functionalities
+manager.addDocument("en", "how can I create a room?", "askCreateRoom");
+manager.addDocument("en", "how do i get started", "asknewbie");
+manager.addDocument("en", "how do I start chatting?", "askStartChatting");
+manager.addDocument("en", "how do I join a room?", "askJoinRoom");
+manager.addDocument("en", "can I create a private room?", "askCreateRoom");
+manager.addDocument("en", "can I chat with people privately?", "askPrivateChat");
+manager.addDocument("en", "how do I join a chat?", "askJoinRoom");
+manager.addDocument("en", "how can I find a room to join?", "askJoinRoom");
+
+// Asking for help with features
+manager.addDocument("en", "I need help", "askHelp");
+manager.addDocument("en", "help me with the chat", "askHelp");
+manager.addDocument("en", "how do I use the chat?", "askHelp");
+manager.addDocument("en", "can you help me with room creation?", "askHelp");
+
+// Asking about chat functionality
+manager.addDocument("en", "how do I send a message?", "askSendMessage");
+manager.addDocument("en", "how do I chat with someone?", "askSendMessage");
+manager.addDocument("en", "can I send files?", "askSendFiles");
+manager.addDocument("en", "can I send images?", "askSendFiles");
+manager.addDocument("en", "how do I share my screen?", "askShareScreen");
+manager.addDocument("en", "can I use audio in the chat?", "askAudioChat");
+manager.addDocument("en", "how do I use voice chat?", "askAudioChat");
+
+// Asking about app functionality or usage
+manager.addDocument("en", "tell me more about this app", "askAppInfo");
+manager.addDocument("en", "what is ChatRouletteX?", "askAppInfo");
+manager.addDocument("en", "how does this app work?", "askAppInfo");
+manager.addDocument("en", "what can I do on ChatRouletteX?", "askAppInfo");
+
+// Add answers for the intents
+manager.addAnswer("en", "greeting.hello", "Hello! How can I assist you today?");
+manager.addAnswer("en", "asknewbie", "To get started with ChatRouletteX, simply follow these steps:Start Chatting: Click on the 'Start Chatting' button to immediately join a room and start chatting with people. Create a Room: If you'd like to create a private room, click the 'Create Room' button to generate a unique room code. Join a Room: If someone shared a room code with you, simply click 'Join Room' and enter the code to connect with them. Chat Privately: You can create or join private rooms and connect with others instantly. No sign-up required!?");
+manager.addAnswer("en", "greeting.morning", "Good morning! How are you today?");
+manager.addAnswer("en", "greeting.afternoon", "Good afternoon! How's your day going?");
+manager.addAnswer("en", "greeting.evening", "Good evening! How was your day?");
+manager.addAnswer("en", "greeting.howAreYou", "I'm just a chatbot, but I'm doing well, thank you!");
+manager.addAnswer("en", "response.howAreYouGood", "That's great to hear! How can I help you today?");
+manager.addAnswer("en", "askName", "I'm Chatbot, your friendly assistant.");
+manager.addAnswer("en", "askWhatDoYouDo", "I'm here to chat with you and assist with various tasks.");
+manager.addAnswer("en", "askCreateRoom", "You can create a room by clicking the 'Create Room' button on the homepage.");
+manager.addAnswer("en", "askStartChatting", "You can start chatting by clicking the 'Start Chatting' button to join a room and meet people.");
+manager.addAnswer("en", "askJoinRoom", "To join a room, enter the room code or click on a room if it's available.");
+manager.addAnswer("en", "askPrivateChat", "Yes, you can create private rooms and chat privately with others.");
+manager.addAnswer("en", "askHelp", "Just ask me anything! I can help you create a room, join a room, or start chatting.");
+manager.addAnswer("en", "askSendMessage", "To send a message, just type it in the chat box and press 'Send'.");
+manager.addAnswer("en", "askSendFiles", "Yes, you can send images or files by using the attachment option in the chat.");
+manager.addAnswer("en", "askShareScreen", "You can share your screen through the settings menu if enabled.");
+manager.addAnswer("en", "askAudioChat", "You can use voice chat by clicking the audio icon in the chat window.");
+manager.addAnswer("en", "askAppInfo", "ChatRouletteX lets you create or join private chat rooms and connect with people instantly.");
+
+// Ensure that the model is trained and saved
 (async () => {
   await manager.train();
   manager.save(); // Optional: persist the model
   console.log("NLP Manager trained and ready.");
 })();
+
 
 // =====================
 // API Endpoints
@@ -191,14 +283,20 @@ io.on("connection", (socket) => {
   socket.on("sendMessage", (data) => {
     const { roomCode, username, message, attachment, audio } = data;
     const trimmedMessage = message ? message.trim() : "";
+
+    // Validate roomCode and username
     if (!roomCode || !username) return;
+
     // Allow message if there's either text, an attachment, or audio
     if (!trimmedMessage && !attachment && !audio) return;
+
     console.log(
       `📨 Message from ${username} in Room ${roomCode}: ${trimmedMessage} ${
         attachment ? "[with attachment]" : ""
       } ${audio ? "[with audio]" : ""}`
     );
+
+    // Emit message to all users in the room
     io.to(roomCode).emit("receiveMessage", {
       username,
       message: trimmedMessage,
