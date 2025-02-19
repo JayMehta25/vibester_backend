@@ -10,8 +10,10 @@ import { fileURLToPath } from "url";
 
 const app = express();
 const PORT = process.env.PORT || 5000; // Ensure the server listens to the correct port
+app.get("/", (req, res) => {
+  res.send("Chat server is running...");
+});
 
-// -----------------------------
 // Ensure the "uploads" folder exists
 // -----------------------------
 const __filename = fileURLToPath(import.meta.url);
@@ -58,7 +60,9 @@ app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded." });
   }
-  const fileUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+
+  // For deployed environments like Railway, dynamically construct the URL
+  const fileUrl = `https://${req.get("host")}/uploads/${req.file.filename}`; // Use deployed hostname
   const fileType = req.file.mimetype; // Get the file type (image, video, etc.)
   
   // Return the file URL and type to the client
@@ -71,10 +75,8 @@ app.post("/upload", upload.single("file"), (req, res) => {
 // (Add documents and answers here as you did earlier)
 const manager = new NlpManager({ languages: ["en"], forceNER: true });
 
-// Add expanded training data...
-// Add relevant variations to the training data for the application context
-
-// Greetings
+// Add expanded training data... (similar to what you already have)
+// Ensure the training data and responses are defined properly
 manager.addDocument("en", "hello", "greeting.hello");
 manager.addDocument("en", "hi", "greeting.hello");
 manager.addDocument("en", "hey", "greeting.hello");
