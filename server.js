@@ -8,10 +8,9 @@ import multer from "multer"; // Import multer for file uploads
 import path from "path";
 import fs from "fs";
 import { fileURLToPath } from "url";
-
+const cors = require('cors');
 const app = express();
 const PORT = 5000;
-
 // -----------------------------
 // Ensure the "uploads" folder exists
 // -----------------------------
