@@ -1,4 +1,3 @@
-// server.js
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
@@ -10,7 +9,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 
 const app = express();
-const PORT = 5000;
+const PORT = process.env.PORT || 5000; // Ensure the server listens to the correct port
 
 // -----------------------------
 // Ensure the "uploads" folder exists
@@ -24,10 +23,10 @@ if (!fs.existsSync(uploadDir)) {
   console.log(`Created uploads folder at ${uploadDir}`);
 }
 
-// Enable CORS for frontend communication
+// Enable CORS for frontend communication (ensure the frontend is allowed to access the server)
 app.use(
   cors({
-    origin: "*", // Allow all origins
+    origin: "*", // Allow all origins for the demo; for production, restrict this
     methods: ["GET", "POST"],
   })
 );
@@ -40,18 +39,17 @@ app.use(express.json());
 // -----------------------------
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/"); // Save files to 'uploads' folder
+    cb(null, uploadDir); // Save files to 'uploads' folder
   },
   filename: (req, file, cb) => {
-    // Generate a unique filename with a timestamp and random number
     const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, uniqueSuffix + "-" + file.originalname);
+    cb(null, uniqueSuffix + "-" + file.originalname); // Generate unique file names
   },
 });
 const upload = multer({ storage });
 
-// Serve static files from the uploads folder
-app.use("/uploads", express.static("uploads"));
+// Serve static files from the uploads folder (to allow frontend access)
+app.use("/uploads", express.static(uploadDir));
 
 // -----------------------------
 // API Endpoint for File Uploads
@@ -60,10 +58,9 @@ app.post("/upload", upload.single("file"), (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: "No file uploaded." });
   }
-  // Construct the URL to access the uploaded file.
-  const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
-  const fileType = req.file.mimetype; // Get the file type (e.g., image, video, pdf, etc.)
-
+  const fileUrl = `http://localhost:5000/uploads/${req.file.filename}`;
+  const fileType = req.file.mimetype; // Get the file type (image, video, etc.)
+  
   // Return the file URL and type to the client
   res.json({ url: fileUrl, type: fileType });
 });
@@ -71,6 +68,7 @@ app.post("/upload", upload.single("file"), (req, res) => {
 // =====================
 // NLP Chatbot Setup (node-nlp)
 // =====================
+// (Add documents and answers here as you did earlier)
 const manager = new NlpManager({ languages: ["en"], forceNER: true });
 
 // Add expanded training data...
@@ -176,9 +174,8 @@ manager.addAnswer("en", "askAppInfo", "ChatRouletteX lets you create or join pri
   console.log("NLP Manager trained and ready.");
 })();
 
-
 // =====================
-// API Endpoints
+// API Endpoints for Chatbot
 // =====================
 app.post("/api/chatbot", async (req, res) => {
   const { message } = req.body;
@@ -199,24 +196,13 @@ app.post("/api/chatbot", async (req, res) => {
   }
 });
 
-app.post("/test", (req, res) => {
-  console.log("Received POST /test with body:", req.body);
-  res.json({ reply: "Test successful!" });
-});
-
-app.get("/", (req, res) => {
-  res.send("Chat server is running...");
-});
-app.get("/favicon.ico", (req, res) => {
-  res.status(204).send();
-});
-
-// =====================
-// Socket.io: Chat Room & User Management
-// =====================
-let chatRooms = {}; // { roomCode: [{ socketId, username }] }
+// --------------------
+// Socket.io Setup for Chat
+// --------------------
+let chatRooms = {}; // Store room info
 let connectedUsers = new Set();
 
+// Function to generate room code
 const generateRoomCode = () =>
   Math.floor(10000 + Math.random() * 90000).toString();
 
@@ -224,13 +210,13 @@ console.log("🧹 Clearing previous session data...");
 chatRooms = {};
 connectedUsers.clear();
 
-// Create HTTP server
+// Create HTTP server and attach socket.io
 const server = http.createServer(app);
 
 // Attach Socket.io server with CORS settings
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: "*", // Allow all origins for the demo; restrict this for production
     methods: ["GET", "POST"],
   },
 });
@@ -239,7 +225,6 @@ io.on("connection", (socket) => {
   console.log(`🔵 New user connected: ${socket.id}`);
   connectedUsers.add(socket.id);
 
-  // Create a new chat room with acknowledgement callback
   socket.on("createRoom", (username, callback) => {
     if (!username || typeof username !== "string" || username.trim() === "") {
       if (callback) callback({ error: "Username is required to create a room." });
@@ -253,7 +238,6 @@ io.on("connection", (socket) => {
     io.to(roomCode).emit("userCount", chatRooms[roomCode].length);
   });
 
-  // Join an existing chat room with acknowledgement callback
   socket.on("joinRoom", (data, callback) => {
     if (!data || !data.roomCode || !data.username) {
       if (callback) callback({ error: "Room code and username are required to join." });
@@ -279,40 +263,32 @@ io.on("connection", (socket) => {
     }
   });
 
-  // Handle real-time messages (with attachment and audio support)
   socket.on("sendMessage", (data) => {
     const { roomCode, username, message, attachment, audio } = data;
     const trimmedMessage = message ? message.trim() : "";
 
-    // Validate roomCode and username
     if (!roomCode || !username) return;
 
-    // Allow message if there's either text, an attachment, or audio
     if (!trimmedMessage && !attachment && !audio) return;
 
-    console.log(
-      `📨 Message from ${username} in Room ${roomCode}: ${trimmedMessage} ${
-        attachment ? "[with attachment]" : ""
-      } ${audio ? "[with audio]" : ""}`
-    );
+    console.log(`📨 Message from ${username} in Room ${roomCode}: ${trimmedMessage} ${
+      attachment ? "[with attachment]" : ""
+    } ${audio ? "[with audio]" : ""}`);
 
-    // Emit message to all users in the room
     io.to(roomCode).emit("receiveMessage", {
       username,
       message: trimmedMessage,
-      attachment, // URL returned from /upload if provided
-      audio,      // Audio data in a serializable format, if provided
+      attachment,
+      audio,
       timestamp: new Date().toLocaleTimeString(),
     });
   });
 
-  // Typing indicator
   socket.on("typing", (data) => {
     const { roomCode, username } = data;
     socket.to(roomCode).emit("userTyping", { username });
   });
 
-  // Handle user disconnection
   socket.on("disconnect", () => {
     console.log(`🔴 User disconnected: ${socket.id}`);
     connectedUsers.delete(socket.id);
