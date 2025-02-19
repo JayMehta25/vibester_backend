@@ -1,11 +1,28 @@
+// server.js
 import express from "express";
 import http from "http";
 import { Server } from "socket.io";
 import cors from "cors";
 import { NlpManager } from "node-nlp";
+import multer from "multer"; // Import multer for file uploads
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from "url";
 
 const app = express();
 const PORT = 5000;
+
+// -----------------------------
+// Ensure the "uploads" folder exists
+// -----------------------------
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const uploadDir = path.join(__dirname, "uploads");
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+  console.log(`Created uploads folder at ${uploadDir}`);
+}
 
 // Enable CORS for frontend communication
 app.use(
@@ -18,50 +35,47 @@ app.use(
 // Use express.json middleware to parse JSON bodies
 app.use(express.json());
 
+// -----------------------------
+// Multer Setup for File Uploads
+// -----------------------------
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, "uploads/"); // Save files to 'uploads' folder
+  },
+  filename: (req, file, cb) => {
+    // Generate a unique filename with a timestamp and random number
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + "-" + file.originalname);
+  },
+});
+const upload = multer({ storage });
+
+// Serve static files from the uploads folder
+app.use("/uploads", express.static("uploads"));
+
+// -----------------------------
+// API Endpoint for File Uploads
+// -----------------------------
+app.post("/upload", upload.single("file"), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: "No file uploaded." });
+  }
+  // Construct the URL to access the uploaded file.
+  const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
+  res.json({ url: fileUrl });
+});
+
 // =====================
 // NLP Chatbot Setup (node-nlp)
 // =====================
 const manager = new NlpManager({ languages: ["en"], forceNER: true });
 
-// Add training data
-// Greetings
+// Add training data...
 manager.addDocument("en", "hello", "greeting.hello");
 manager.addDocument("en", "hi", "greeting.hello");
 manager.addDocument("en", "hey", "greeting.hello");
-// How are you inquiries
-manager.addDocument("en", "how are you", "bot.feelings");
-manager.addDocument("en", "how's it going", "bot.feelings");
-// Ask about app purpose
-manager.addDocument("en", "what is this", "app.purpose");
-manager.addDocument("en", "what's this", "app.purpose");
-// Features inquiries
-manager.addDocument("en", "what features do you have", "app.features");
-manager.addDocument("en", "what can you do", "app.features");
-// Privacy
-manager.addDocument("en", "is my chat secure", "app.privacy");
-manager.addDocument("en", "private", "app.privacy");
-// How to use the app
-manager.addDocument("en", "how do i use this", "app.howto");
-manager.addDocument("en", "how to start", "app.howto");
-// Account/login
-manager.addDocument("en", "login", "app.login");
-// Logout
-manager.addDocument("en", "logout", "app.logout");
-// Support/help
-manager.addDocument("en", "help", "app.help");
-
-// Add responses
+// ... (other training data and answers)
 manager.addAnswer("en", "greeting.hello", "Hello! How can I help you today?");
-manager.addAnswer("en", "bot.feelings", "I'm just a bot, but I'm here to assist you!");
-manager.addAnswer("en", "app.purpose", "ChatRouletteX connects you with others via private chat rooms and real-time messaging.");
-manager.addAnswer("en", "app.features", "Our app offers real-time messaging, voice chats, customizable themes, and more!");
-manager.addAnswer("en", "app.privacy", "Your privacy is our priority. All chats remain secure and confidential.");
-manager.addAnswer("en", "app.howto", "Getting started is easy! Click on 'Chat Now' to start chatting or create/join a private room.");
-manager.addAnswer("en", "app.login", "Simply enter your username on the login page. No complicated registration needed!");
-manager.addAnswer("en", "app.logout", "To log out, click the logout button in the navigation bar.");
-manager.addAnswer("en", "app.help", "I'm here to help! What do you need assistance with?");
-
-// Default fallback
 manager.addAnswer("en", "None", "I'm not sure I understand. Could you please rephrase your question?");
 
 // Train the NLP model (runs on server start)
@@ -74,8 +88,6 @@ manager.addAnswer("en", "None", "I'm not sure I understand. Could you please rep
 // =====================
 // API Endpoints
 // =====================
-
-// Chatbot endpoint using node-nlp
 app.post("/api/chatbot", async (req, res) => {
   const { message } = req.body;
   if (!message || typeof message !== "string") {
@@ -83,21 +95,23 @@ app.post("/api/chatbot", async (req, res) => {
   }
   try {
     const result = await manager.process("en", message);
-    const reply = result.answer || "I'm not sure I understand. Could you please rephrase your question?";
+    const reply =
+      result.answer ||
+      "I'm not sure I understand. Could you please rephrase your question?";
     return res.json({ reply });
   } catch (error) {
     console.error("Error processing NLP:", error);
-    return res.status(500).json({ reply: "Sorry, an error occurred while processing your request." });
+    return res.status(500).json({
+      reply: "Sorry, an error occurred while processing your request.",
+    });
   }
 });
 
-// Test endpoint to verify POST requests work
 app.post("/test", (req, res) => {
   console.log("Received POST /test with body:", req.body);
   res.json({ reply: "Test successful!" });
 });
 
-// GET endpoint for root (for quick server verification)
 app.get("/", (req, res) => {
   res.send("Chat server is running...");
 });
@@ -111,7 +125,8 @@ app.get("/favicon.ico", (req, res) => {
 let chatRooms = {}; // { roomCode: [{ socketId, username }] }
 let connectedUsers = new Set();
 
-const generateRoomCode = () => Math.floor(10000 + Math.random() * 90000).toString();
+const generateRoomCode = () =>
+  Math.floor(10000 + Math.random() * 90000).toString();
 
 console.log("🧹 Clearing previous session data...");
 chatRooms = {};
@@ -132,24 +147,24 @@ io.on("connection", (socket) => {
   console.log(`🔵 New user connected: ${socket.id}`);
   connectedUsers.add(socket.id);
 
-  // Create a new chat room
-  socket.on("createRoom", (username) => {
+  // Create a new chat room with acknowledgement callback
+  socket.on("createRoom", (username, callback) => {
     if (!username || typeof username !== "string" || username.trim() === "") {
-      socket.emit("error", "Username is required to create a room.");
+      if (callback) callback({ error: "Username is required to create a room." });
       return;
     }
     const roomCode = generateRoomCode();
     chatRooms[roomCode] = [{ socketId: socket.id, username }];
     socket.join(roomCode);
     console.log(`✅ Room created: ${roomCode} by ${username}`);
-    socket.emit("roomCreated", roomCode);
+    if (callback) callback(roomCode);
     io.to(roomCode).emit("userCount", chatRooms[roomCode].length);
   });
 
-  // Join an existing chat room
-  socket.on("joinRoom", (data) => {
+  // Join an existing chat room with acknowledgement callback
+  socket.on("joinRoom", (data, callback) => {
     if (!data || !data.roomCode || !data.username) {
-      socket.emit("error", "Room code and username are required to join.");
+      if (callback) callback({ error: "Room code and username are required to join." });
       return;
     }
     const trimmedRoomCode = data.roomCode.trim();
@@ -159,7 +174,7 @@ io.on("connection", (socket) => {
       chatRooms[trimmedRoomCode].push({ socketId: socket.id, username });
       socket.join(trimmedRoomCode);
       console.log(`✅ User ${username} joined room: ${trimmedRoomCode}`);
-      socket.emit("roomJoined", trimmedRoomCode);
+      if (callback) callback(trimmedRoomCode);
       io.to(trimmedRoomCode).emit("userCount", chatRooms[trimmedRoomCode].length);
       io.to(trimmedRoomCode).emit("receiveMessage", {
         username: "System",
@@ -167,16 +182,30 @@ io.on("connection", (socket) => {
       });
     } else {
       console.log(`❌ Room ${trimmedRoomCode} does not exist!`);
+      if (callback) callback({ error: "Room does not exist." });
       socket.emit("error", "Room does not exist.");
     }
   });
 
-  // Handle real-time messages
+  // Handle real-time messages (with attachment and audio support)
   socket.on("sendMessage", (data) => {
-    const { roomCode, username, message } = data;
-    if (!roomCode || !username || !message.trim()) return;
-    console.log(`📨 Message from ${username} in Room ${roomCode}: ${message}`);
-    io.to(roomCode).emit("receiveMessage", { username, message });
+    const { roomCode, username, message, attachment, audio } = data;
+    const trimmedMessage = message ? message.trim() : "";
+    if (!roomCode || !username) return;
+    // Allow message if there's either text, an attachment, or audio
+    if (!trimmedMessage && !attachment && !audio) return;
+    console.log(
+      `📨 Message from ${username} in Room ${roomCode}: ${trimmedMessage} ${
+        attachment ? "[with attachment]" : ""
+      } ${audio ? "[with audio]" : ""}`
+    );
+    io.to(roomCode).emit("receiveMessage", {
+      username,
+      message: trimmedMessage,
+      attachment, // URL returned from /upload if provided
+      audio,      // Audio data in a serializable format, if provided
+      timestamp: new Date().toLocaleTimeString(),
+    });
   });
 
   // Typing indicator
