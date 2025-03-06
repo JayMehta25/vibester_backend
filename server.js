@@ -18,7 +18,7 @@ import crypto from 'crypto';
 // ES modules fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
+const bcrypt = require('bcryptjs');
 const app = express();
 const server = http.createServer(app);
 
@@ -1016,7 +1016,7 @@ io.on('connection', (socket) => {
 
 // Define a route for the root URL
 app.get('/', (req, res) => {
-  res.send('Welcome to the API!'); // You can customize this message
+  res.status(200).json({ message: 'Backend is running!' });
 });
 
 // Catch-all handler for any request that doesn't match above
