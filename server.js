@@ -107,6 +107,9 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
+// Serve static files from the React app (if applicable)
+app.use(express.static(path.join(__dirname, 'client/build')));
+
 // File upload configuration
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -1009,6 +1012,16 @@ io.on('connection', (socket) => {
       }
     }
   });
+});
+
+// Define a route for the root URL
+app.get('/', (req, res) => {
+  res.send('Welcome to the API!'); // You can customize this message
+});
+
+// Catch-all handler for any request that doesn't match above
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'client/build/index.html')); // Serve your React app
 });
 
 // Start server
