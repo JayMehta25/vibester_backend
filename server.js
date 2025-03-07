@@ -18,7 +18,6 @@ import crypto from 'crypto';
 // ES modules fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const bcrypt = require('bcryptjs');
 const app = express();
 const server = http.createServer(app);
 
