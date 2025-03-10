@@ -14,12 +14,23 @@ import nodemailer from 'nodemailer';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
+import connectDB from './config/db.js'; // Import the connectDB function
+import pkg from 'node-nlp'; // Import the entire package
+const { NlpManager } = pkg; // Destructure to get NlpManager
+
+// Load environment variables
+dotenv.config();
 
 // ES modules fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const server = http.createServer(app);
+
+// Function to generate a unique room code
+const generateRoomCode = () => {
+  return Math.random().toString(36).substring(2, 8); // Generates a random string of 6 characters
+};
 
 // Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
@@ -36,29 +47,24 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chatapp';
 
 // Load environment variables
-dotenv.config();
 console.log('Environment check:');
 console.log('- NODE_ENV:', process.env.NODE_ENV);
 console.log('- EMAIL_USER exists:', !!process.env.EMAIL_USER);
 console.log('- EMAIL_PASS exists:', !!process.env.EMAIL_PASS);
 
 // Connect to MongoDB
-mongoose.connect(MONGODB_URI)
-  .then(async () => {
-    console.log('Connected to MongoDB');
-    
-    // WARNING: This will delete all users - only do this in development
-    if (process.env.NODE_ENV === 'development') {
-      try {
-        await mongoose.connection.db.dropCollection('users');
-        console.log('Dropped users collection to reset indexes');
-      } catch (error) {
-        // Collection might not exist yet
-        console.log('No users collection to drop or other error:', error.message);
-      }
-    }
-  })
-  .catch(err => console.error('MongoDB connection error:', err));
+await connectDB(); // Ensure this is awaited in an async context
+
+// WARNING: This will delete all users - only do this in development
+if (process.env.NODE_ENV === 'development') {
+  try {
+    await mongoose.connection.db.dropCollection('users'); // Ensure this is awaited
+    console.log('Dropped users collection to reset indexes');
+  } catch (error) {
+    // Collection might not exist yet
+    console.log('No users collection to drop or other error:', error.message);
+  }
+}
 
 // Define the User model
 const UserSchema = new mongoose.Schema({
@@ -1011,6 +1017,12 @@ io.on('connection', (socket) => {
       }
     }
   });
+
+  socket.on("createRoom", (username, callback) => {
+    // Logic to create a room
+    const roomCode = generateRoomCode(); // Your logic to generate a room code
+    callback(roomCode); // Send the room code back to the client
+  });
 });
 
 // Define a route for the root URL
@@ -1023,9 +1035,103 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'client/build/index.html')); // Serve your React app
 });
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Initialize the NLP Manager
+const manager = new NlpManager({ languages: ["en"], forceNER: true });
+
+// Add training data
+// Greetings
+manager.addDocument("en", "hello", "greeting.hello");
+manager.addDocument("en", "hi", "greeting.hello");
+manager.addDocument("en", "hey", "greeting.hello");
+// How are you inquiries
+manager.addDocument("en", "how are you", "bot.feelings");
+manager.addDocument("en", "how's it going", "bot.feelings");
+// Ask about app purpose
+manager.addDocument("en", "what is this", "app.purpose");
+manager.addDocument("en", "what's this", "app.purpose");
+// Features inquiries
+manager.addDocument("en", "what features do you have", "app.features");
+manager.addDocument("en", "what can you do", "app.features");
+// Privacy
+manager.addDocument("en", "is my chat secure", "app.privacy");
+manager.addDocument("en", "private", "app.privacy");
+// How to use the app
+manager.addDocument("en", "how do i use this", "app.howto");
+manager.addDocument("en", "how to start", "app.howto");
+// Account/login
+manager.addDocument("en", "login", "app.login");
+// Logout
+manager.addDocument("en", "logout", "app.logout");
+// Support/help
+manager.addDocument("en", "help", "app.help");
+
+// Add responses
+manager.addAnswer("en", "greeting.hello", "Hello! How can I help you today?");
+manager.addAnswer("en", "bot.feelings", "I'm just a bot, but I'm here to assist you!");
+manager.addAnswer("en", "app.purpose", "ChatRouletteX connects you with others via private chat rooms and real-time messaging.");
+manager.addAnswer("en", "app.features", "Our app offers real-time messaging, voice chats, customizable themes, and more!");
+manager.addAnswer("en", "app.privacy", "Your privacy is our priority. All chats remain secure and confidential.");
+manager.addAnswer("en", "app.howto", "Getting started is easy! Click on 'Chat Now' to start chatting or create/join a private room.");
+manager.addAnswer("en", "app.login", "Simply enter your username on the login page. No complicated registration needed!");
+manager.addAnswer("en", "app.logout", "To log out, click the logout button in the navigation bar.");
+manager.addAnswer("en", "app.help", "I'm here to help! What do you need assistance with?");
+
+// Default fallback
+manager.addAnswer("en", "None", "I'm not sure I understand. Could you please rephrase your question?");
+
+// Train the NLP model (runs on server start)
+(async () => {
+  await manager.train();
+  manager.save(); // Optional: persist the model
+  console.log("NLP Manager trained and ready.");
+})();
+
+// =====================
+// API Endpoints
+// =====================
+
+// Chatbot endpoint using node-nlp
+app.post("/api/chatbot", async (req, res) => {
+  const { message } = req.body;
+  console.log("Received message:", message); // Log the received message
+  if (!message || typeof message !== "string") {
+    return res.status(400).json({ reply: "Invalid message." });
+  }
+  try {
+    const result = await manager.process("en", message);
+    const reply = result.answer || "I'm not sure I understand. Could you please rephrase your question?";
+    return res.json({ reply });
+  } catch (error) {
+    console.error("Error processing NLP:", error);
+    return res.status(500).json({ reply: "Sorry, an error occurred while processing your request." });
+  }
 });
+
+// Test endpoint to verify POST requests work
+app.post("/test", (req, res) => {
+  console.log("Received POST /test with body:", req.body);
+  res.json({ reply: "Test successful!" });
+});
+
+// GET endpoint for root (for quick server verification)
+app.get("/", (req, res) => {
+  res.send("Chat server is running...");
+});
+app.get("/favicon.ico", (req, res) => {
+  res.status(204).send();
+});
+
+const startServer = async () => {
+  // Load environment variables
+  dotenv.config();
+
+  // Connect to MongoDB
+  await connectDB();
+
+  // Start the server
+  server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+};
+
+startServer(); // Call the async function to start the server
 
 export default app;
