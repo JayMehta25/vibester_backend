@@ -35,7 +35,7 @@ const generateRoomCode = () => {
 // Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3001",
+    origin: "http://localhost:3000",
     methods: ["GET", "POST"]
   },
   maxHttpBufferSize: 50 * 1024 * 1024 // 50MB
@@ -109,7 +109,7 @@ const activeRooms = new Map();
 
 // Middleware
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "http://localhost:3001"); // Update this to your frontend URL
+  res.header("Access-Control-Allow-Origin", "http://localhost:3000"); // Update this to your frontend URL
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") {
@@ -119,7 +119,15 @@ app.use((req, res, next) => {
 });
 
 app.use(cors({
-  origin: '*', // Allow all origins
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
@@ -817,7 +825,7 @@ app.post('/forgot-password', async (req, res) => {
     await user.save();
     
     // Create reset URL - adjusted for React frontend
-    const resetUrl = `http://localhost:3001/reset-password/${resetToken}`;
+    const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
     
     // Configure email transporter
     const transporter = nodemailer.createTransport({
