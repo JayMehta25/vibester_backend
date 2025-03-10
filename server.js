@@ -109,7 +109,7 @@ const activeRooms = new Map();
 
 // Middleware
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "http://localhost:3000"); // Update this to your frontend URL
+  res.header("Access-Control-Allow-Origin", "http://localhost:3001"); // Update this to your frontend URL
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") {
@@ -817,7 +817,7 @@ app.post('/forgot-password', async (req, res) => {
     await user.save();
     
     // Create reset URL - adjusted for React frontend
-    const resetUrl = `http://localhost:3000/reset-password/${resetToken}`;
+    const resetUrl = `http://localhost:3001/reset-password/${resetToken}`;
     
     // Configure email transporter
     const transporter = nodemailer.createTransport({
