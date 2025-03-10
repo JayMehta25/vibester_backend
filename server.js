@@ -108,6 +108,16 @@ const userSocketMap = new Map();
 const activeRooms = new Map();
 
 // Middleware
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "http://localhost:3000"); // Update this to your frontend URL
+  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200); // Respond to preflight requests
+  }
+  next();
+});
+
 app.use(cors());
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
