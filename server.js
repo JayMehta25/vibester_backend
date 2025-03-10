@@ -118,6 +118,7 @@ app.use((req, res, next) => {
   next();
 });
 
+const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001'];
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
@@ -129,6 +130,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
+
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
