@@ -35,7 +35,7 @@ const generateRoomCode = () => {
 // Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: "http://localhost:3001",
     methods: ["GET", "POST"]
   },
   maxHttpBufferSize: 50 * 1024 * 1024 // 50MB
@@ -118,7 +118,9 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors());
+app.use(cors({
+  origin: '*', // Allow all origins
+}));
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
