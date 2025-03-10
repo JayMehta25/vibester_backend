@@ -797,8 +797,14 @@ app.post('/simple-verify', async (req, res) => {
   }
 });
 
+app.get('/test', (req, res) => {
+  res.json({ message: 'Backend is alive' });
+});
+
+
 // Route to request password reset
-app.post('/forgot-password', async (req, res) => {
+app.post('/api/forgot-password', async (req, res) => {
+  console.log('✅ Hit /api/forgot-password')
   try {
     const { email } = req.body;
     
