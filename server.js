@@ -16,14 +16,27 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import connectDB from './config/db.js'; // Import the connectDB function
 import pkg from 'node-nlp'; // Import the entire package
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'https://chatroullete-x-frontend-stage-7.vercel.app',
+    /https:\/\/(.*\.)?chatroullete-x-frontend-stage-7\.vercel\.app/
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
 const { NlpManager } = pkg; // Destructure to get NlpManager
 
 // Load environment variables
 dotenv.config();
 
-// ES modules fix for __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+
+
+app.use(cors(corsOptions));
+
 const app = express();
 const server = http.createServer(app);
 
@@ -39,8 +52,10 @@ const allowedOrigins = [
 // Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
-    methods: ["GET", "POST"]
+    origin: corsOptions.origin,
+    methods: corsOptions.methods,
+    allowedHeaders: corsOptions.allowedHeaders,
+    credentials: corsOptions.credentials
   },
   maxHttpBufferSize: 50 * 1024 * 1024
 });
@@ -110,37 +125,6 @@ const User = mongoose.model('User', UserSchema);
 // Maps for active users and rooms
 const userSocketMap = new Map();
 const activeRooms = new Map();
-
-// Middleware
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://chatroullete-x-frontend-stage-7-30iz9v6p7.vercel.app/"); // Update this to your frontend URL
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200); // Respond to preflight requests
-  }
-  next();
-});
-
-
-
-app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || allowedOrigins.some(pattern => {
-      if (typeof pattern === 'string') {
-        return origin === pattern;
-      }
-      return pattern.test(origin);
-    })) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
 
 
 app.use(bodyParser.json());
@@ -352,7 +336,7 @@ app.post('/register', async (req, res) => {
 });
 
 
-app.options('/login', cors(corsOptions), (req, res) => {
+app.options('/login', (req, res) => {
   res.sendStatus(200);
 });
 
@@ -423,7 +407,7 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.get('/verify/:token', async (req, res) => {
+app.get('/verify/:token', cors(corsOptions), async (req, res) => {
   const user = await User.findOne({ verificationToken: req.params.token });
   if (!user) {
     return res.status(400).send('Invalid verification token');
@@ -1153,28 +1137,18 @@ app.post("/api/chatbot", async (req, res) => {
   }
 });
 
-// Test endpoint to verify POST requests work
-app.post("/test", (req, res) => {
-  console.log("Received POST /test with body:", req.body);
-  res.json({ reply: "Test successful!" });
-});
 
-// GET endpoint for root (for quick server verification)
-app.get("/", (req, res) => {
-  res.send("Chat server is running...");
-});
 app.get("/favicon.ico", (req, res) => {
   res.status(204).send();
 });
 
 const startServer = async () => {
-  // Load environment variables
-  dotenv.config();
+  // Connect to MongoDB first
+  await mongoose.connect(MONGODB_URI)
+    .then(() => console.log('Connected to MongoDB'))
+    .catch(err => console.error('MongoDB connection error:', err));
 
-  // Connect to MongoDB
-  await connectDB();
-
-  // Start the server
+  // Then start server
   server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 };
 
