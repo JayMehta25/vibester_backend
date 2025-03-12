@@ -31,13 +31,11 @@ const server = http.createServer(app);
 const generateRoomCode = () => {
   return Math.random().toString(36).substring(2, 8); // Generates a random string of 6 characters
 };
-const allowedOrigins = process.env.ALLOWED_ORIGINS
-  ? process.env.ALLOWED_ORIGINS.split(',')
-  : [
-      'http://localhost:3000',
-      'http://localhost:3001',
-      'https://chatroullete-x-frontend-stage-7-30iz9v6p7.vercel.app'
-    ];
+const allowedOrigins = [
+  'http://localhost:3000',
+  /https:\/\/(.*\.)?chatroullete-x-frontend-stage-7\.vercel\.app/,
+  'https://chatroullete-x-frontend.vercel.app' // Your production domain
+];
 // Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
   cors: {
@@ -115,7 +113,7 @@ const activeRooms = new Map();
 
 // Middleware
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "https://chatroullete-x-frontend-stage-7-30iz9v6p7.vercel.app"); // Update this to your frontend URL
+  res.header("Access-Control-Allow-Origin", "https://chatroullete-x-frontend-stage-7-30iz9v6p7.vercel.app/"); // Update this to your frontend URL
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") {
@@ -128,16 +126,20 @@ app.use((req, res, next) => {
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.some(pattern => {
+      if (typeof pattern === 'string') {
+        return origin === pattern;
+      }
+      return pattern.test(origin);
+    })) {
       callback(null, true);
     } else {
-      console.log(`Blocked origin: ${origin}`); // Log blocked origins for debugging
       callback(new Error('Not allowed by CORS'));
     }
   },
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true // If you need cookies or auth headers in the future
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
 
@@ -347,6 +349,11 @@ app.post('/register', async (req, res) => {
     console.error('Registration error:', error);
     res.status(500).json({ message: 'Server error during registration' });
   }
+});
+
+
+app.options('/login', cors(corsOptions), (req, res) => {
+  res.sendStatus(200);
 });
 
 // Updated login endpoint to check verification status
