@@ -17,42 +17,9 @@ import connectDB from './config/db.js'; // Import the connectDB function
 import pkg from 'node-nlp'; // Import the entire package
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const corsOptions = {
-  origin: [
-    'http://localhost:3000',
-    'https://chatroullete-x-frontend-stage-7.vercel.app',
-    /https:\/\/(.*\.)?chatroullete-x-frontend-stage-7\.vercel\.app/
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
-const { NlpManager } = pkg; // Destructure to get NlpManager
-// Required for Railway proxy
-app.enable('trust proxy');
-io.engine.on("initial_headers", (headers, req) => {
-  headers["Access-Control-Allow-Origin"] = req.headers.origin || "";
-});
-// Load environment variables
-dotenv.config();
-
-
-
-app.use(cors(corsOptions));
 
 const app = express();
 const server = http.createServer(app);
-
-// Function to generate a unique room code
-const generateRoomCode = () => {
-  return Math.random().toString(36).substring(2, 8); // Generates a random string of 6 characters
-};
-const allowedOrigins = [
-  'http://localhost:3000',
-  /https:\/\/(.*\.)?chatroullete-x-frontend-stage-7\.vercel\.app/,
-  'https://chatroullete-x-frontend.vercel.app' // Your production domain
-];
-// Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
   cors: {
     origin: [
@@ -66,6 +33,47 @@ const io = new Server(server, {
   transports: ['websocket', 'polling'], // Add explicit transports
   path: '/socket.io/' // Ensure path matches frontend
 });
+
+
+const corsOptions = {
+  origin: [
+    'http://localhost:3000',
+    'https://chatroullete-x-frontend-stage-7.vercel.app',
+    /https:\/\/(.*\.)?chatroullete-x-frontend-stage-7\.vercel\.app/
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+const { NlpManager } = pkg; // Destructure to get NlpManager
+
+// Load environment variables
+dotenv.config();
+
+
+
+
+
+
+app.enable('trust proxy');
+io.engine.on("initial_headers", (headers, req) => {
+  headers["Access-Control-Allow-Origin"] = req.headers.origin || "";
+});
+
+app.use(cors(corsOptions));
+
+// Function to generate a unique room code
+const generateRoomCode = () => {
+  return Math.random().toString(36).substring(2, 8); // Generates a random string of 6 characters
+};
+const allowedOrigins = [
+  'http://localhost:3000',
+  /https:\/\/(.*\.)?chatroullete-x-frontend-stage-7\.vercel\.app/,
+  'https://chatroullete-x-frontend.vercel.app' // Your production domain
+];
+// Initialize socket.io with CORS and buffer size for attachments
+
 
 // Database setup
 const PORT = process.env.PORT || 5000;
