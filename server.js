@@ -14,7 +14,6 @@ import nodemailer from 'nodemailer';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
 import crypto from 'crypto';
-import users from './routes/users.js';
 import connectDB from './config/db.js'; // Import the connectDB function
 import pkg from 'node-nlp'; // Import the entire package
 const { NlpManager } = pkg; // Destructure to get NlpManager
@@ -898,8 +897,8 @@ app.post('/api/forgot-password', async (req, res) => {
 });
 
 // Route to handle password reset
-app.post('/reset-password/:token', async (req, res) => {
-  console.log('✅ Hit /reset-password/:token')
+app.post('/api/reset-password/:token', async (req, res) => {
+  console.log('✅ Hit /api/reset-password/:token')
   try {
     const { password } = req.body;
     const { token } = req.params;
