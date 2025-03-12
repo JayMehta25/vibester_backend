@@ -36,7 +36,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS
   : [
       'http://localhost:3000',
       'http://localhost:3001',
-      'https://chatroullete-x-frontend-vo7y.vercel.app'
+      'https://chatroullete-x-frontend-stage-7-30iz9v6p7.vercel.app'
     ];
 // Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
@@ -115,7 +115,7 @@ const activeRooms = new Map();
 
 // Middleware
 app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "http://localhost:3000"); // Update this to your frontend URL
+  res.header("Access-Control-Allow-Origin", "https://chatroullete-x-frontend-stage-7-30iz9v6p7.vercel.app"); // Update this to your frontend URL
   res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
   res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (req.method === "OPTIONS") {
