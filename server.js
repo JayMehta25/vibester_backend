@@ -31,11 +31,13 @@ const server = http.createServer(app);
 const generateRoomCode = () => {
   return Math.random().toString(36).substring(2, 8); // Generates a random string of 6 characters
 };
-const allowedOrigins = [
-  'http://localhost:3000', 
-  'http://localhost:3001', 
-  'https://chatroullete-x-frontend-vo7y.vercel.app/' // Add your Vercel frontend domain here
-];
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : [
+      'http://localhost:3000',
+      'http://localhost:3001',
+      'https://chatroullete-x-frontend-vo7y.vercel.app'
+    ];
 // Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
   cors: {
