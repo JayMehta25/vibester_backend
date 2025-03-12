@@ -118,7 +118,12 @@ app.use((req, res, next) => {
   next();
 });
 
-const allowedOrigins = ['http://localhost:3000', 'http://localhost:3001'];
+const allowedOrigins = [
+  'http://localhost:3000', 
+  'http://localhost:3001', 
+  'https://chatroullete-x-frontend-vo7y.vercel.app' // Add your Vercel frontend domain here
+];
+
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin || allowedOrigins.includes(origin)) {
