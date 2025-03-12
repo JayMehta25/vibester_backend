@@ -35,10 +35,10 @@ const generateRoomCode = () => {
 // Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    origin: allowedOrigins,
     methods: ["GET", "POST"]
   },
-  maxHttpBufferSize: 50 * 1024 * 1024 // 50MB
+  maxHttpBufferSize: 50 * 1024 * 1024
 });
 
 // Database setup
@@ -121,7 +121,7 @@ app.use((req, res, next) => {
 const allowedOrigins = [
   'http://localhost:3000', 
   'http://localhost:3001', 
-  'https://chatroullete-x-frontend-vo7y-1kalw6e4u-jays-projects-b9bb1863.vercel.app' // Add your Vercel frontend domain here
+  'https://chatroullete-x-frontend-vo7y.vercel.app/' // Add your Vercel frontend domain here
 ];
 
 app.use(cors({
@@ -129,11 +129,13 @@ app.use(cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
+      console.log(`Blocked origin: ${origin}`); // Log blocked origins for debugging
       callback(new Error('Not allowed by CORS'));
     }
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true // If you need cookies or auth headers in the future
 }));
 
 
