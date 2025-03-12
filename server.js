@@ -9,7 +9,6 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { fileURLToPath } from 'url';
-import { v4 as uuidv4 } from 'uuid';
 import nodemailer from 'nodemailer';
 import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
@@ -29,7 +28,11 @@ const corsOptions = {
   allowedHeaders: ['Content-Type', 'Authorization']
 };
 const { NlpManager } = pkg; // Destructure to get NlpManager
-
+// Required for Railway proxy
+app.enable('trust proxy');
+io.engine.on("initial_headers", (headers, req) => {
+  headers["Access-Control-Allow-Origin"] = req.headers.origin || "";
+});
 // Load environment variables
 dotenv.config();
 
@@ -52,12 +55,16 @@ const allowedOrigins = [
 // Initialize socket.io with CORS and buffer size for attachments
 const io = new Server(server, {
   cors: {
-    origin: corsOptions.origin,
-    methods: corsOptions.methods,
-    allowedHeaders: corsOptions.allowedHeaders,
-    credentials: corsOptions.credentials
+    origin: [
+      'http://localhost:3000',
+      'https://chatroullete-x-frontend-stage-7.vercel.app',
+      /\.vercel\.app$/
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
   },
-  maxHttpBufferSize: 50 * 1024 * 1024
+  transports: ['websocket', 'polling'], // Add explicit transports
+  path: '/socket.io/' // Ensure path matches frontend
 });
 
 // Database setup
