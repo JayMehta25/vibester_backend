@@ -43,8 +43,8 @@ const io = new Server(server, {
 
 // Database setup
 const PORT = process.env.PORT || 5000;
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chatapp';
+const JWT_SECRET = process.env.JWT_SECRET || 'Xn2r5u8x/A?D(G+KbPeShVmYp3s6v9y$';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://Jay:Jaymehta10@chatroulletex.hqjno.mongodb.net/?retryWrites=true&w=majority&appName=chatRoulleteX';
 
 // Load environment variables
 console.log('Environment check:');
