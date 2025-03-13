@@ -52,10 +52,6 @@ const { NlpManager } = pkg; // Destructure to get NlpManager
 dotenv.config();
 
 
-
-
-
-
 app.enable('trust proxy');
 io.engine.on("initial_headers", (headers, req) => {
   headers["Access-Control-Allow-Origin"] = req.headers.origin || "";
@@ -818,8 +814,8 @@ app.get('/test', (req, res) => {
 
 
 // Route to request password reset
-app.post('/api/forgot-password', async (req, res) => {
-  console.log('✅ Hit /api/forgot-password')
+app.post('/forgot-password', async (req, res) => {
+  console.log('✅ Hit /forgot-password')
   try {
     const { email } = req.body;
     
@@ -912,8 +908,8 @@ app.post('/api/forgot-password', async (req, res) => {
 });
 
 // Route to handle password reset
-app.post('/api/reset-password/:token', async (req, res) => {
-  console.log('✅ Hit /api/reset-password/:token')
+app.post('/reset-password/:token', async (req, res) => {
+  console.log('✅ Hit /reset-password/:token')
   try {
     const { password } = req.body;
     const { token } = req.params;
