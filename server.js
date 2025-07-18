@@ -15,49 +15,60 @@ import dotenv from 'dotenv';
 import crypto from 'crypto';
 import connectDB from './config/db.js'; // Import the connectDB function
 import pkg from 'node-nlp'; // Import the entire package
+import axios from 'axios';
+import ffmpeg from 'fluent-ffmpeg';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
+import timeout from 'connect-timeout';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --- GLOBAL CORS HEADERS FOR ALL ROUTES AND STATIC FILES ---
+// This ensures all responses have the correct CORS headers for uploads, audio, and any other resource
 const app = express();
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, HEAD');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, Range');
+  res.setHeader('Accept-Ranges', 'bytes');
+  next();
+});
+
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: [
-      'http://localhost:3000',
-      'https://chatroullete-x-frontend-stage-7.vercel.app',
-      /\.vercel\.app$/
-    ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
-    credentials: true
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    methods: ["GET", "POST"],
+    credentials: true,
+    allowedHeaders: ["Content-Type", "Authorization", "Accept", "Origin"]
   },
-  transports: ['websocket', 'polling'], // Add explicit transports
-  path: '/socket.io/' // Ensure path matches frontend
+  transports: ['websocket', 'polling'],
+  path: '/socket.io/'
 });
 
-
-const corsOptions = {
-  origin: [
-    'http://localhost:3000',
-    'https://chatroullete-x-frontend-stage-7.vercel.app',
-    /https:\/\/(.*\.)?chatroullete-x-frontend-stage-7\.vercel\.app/
-  ],
+// CORS configuration (allow all origins for global access)
+app.use(cors({
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-};
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin']
+}));
 
 const { NlpManager } = pkg; // Destructure to get NlpManager
 
 // Load environment variables
 dotenv.config();
 
+// A map from an interest to the room that serves it.
+const interestToRoomMap = new Map();
 
 app.enable('trust proxy');
 io.engine.on("initial_headers", (headers, req) => {
-  headers["Access-Control-Allow-Origin"] = req.headers.origin || "";
+  const origin = req.headers.origin;
+  if (origin) {
+    headers["Access-Control-Allow-Origin"] = origin;
+  }
 });
-
-app.use(cors(corsOptions));
 
 // Function to generate a unique room code
 const generateRoomCode = () => {
@@ -65,8 +76,8 @@ const generateRoomCode = () => {
 };
 const allowedOrigins = [
   'http://localhost:3000',
-  /https:\/\/(.*\.)?chatroullete-x-frontend-stage-7\.vercel\.app/,
-  'https://chatroullete-x-frontend.vercel.app' // Your production domain
+  // /https:\/\/(.*\.)?chatroullete-x-frontend-stage-7\.vercel\.app/,
+  // 'https://chatroullete-x-frontend.vercel.app' // Your production domain
 ];
 // Initialize socket.io with CORS and buffer size for attachments
 
@@ -135,11 +146,22 @@ const User = mongoose.model('User', UserSchema);
 
 // Maps for active users and rooms
 const userSocketMap = new Map();
+const socketToUserMap = new Map(); // Map socket ID to username
 const activeRooms = new Map();
+const waitingUsersByInterest = new Map();
 
 
 app.use(bodyParser.json());
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Add a timeout middleware for uploads and API requests
+app.use(timeout('30s'));
+app.use((req, res, next) => {
+  if (!req.timedout) next();
+});
+
+// Serve static files from the 'uploads' directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Serve static files from the React app (if applicable)
 app.use(express.static(path.join(__dirname, 'client/build')));
@@ -156,7 +178,27 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => {
     // Generate unique filename with original extension
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    const fileExt = path.extname(file.originalname) || '';
+    let fileExt = path.extname(file.originalname) || '';
+    
+    // For audio files, ensure we have a proper extension
+    if (file.mimetype.startsWith('audio/')) {
+      if (!fileExt) {
+        // Map MIME types to extensions
+        const mimeToExt = {
+          'audio/webm': '.webm',
+          'audio/mpeg': '.mp3',
+          'audio/mp3': '.mp3',
+          'audio/wav': '.wav',
+          'audio/ogg': '.ogg',
+          'audio/mp4': '.m4a',
+          'audio/aac': '.aac',
+          'audio/flac': '.flac'
+        };
+        fileExt = mimeToExt[file.mimetype] || '.webm';
+      }
+      console.log(`Audio file upload: ${file.originalname} -> ${fileExt} (${file.mimetype})`);
+    }
+    
     cb(null, 'file-' + uniqueSuffix + fileExt);
   }
 });
@@ -183,79 +225,296 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
+// Update multer config to reduce max file size
 const upload = multer({ 
   storage,
   fileFilter,
-  limits: { fileSize: 50 * 1024 * 1024 }
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB max file size
 });
 
-// Serve uploaded files with proper headers
-app.use('/uploads', (req, res, next) => {
-  const filePath = path.join(__dirname, 'uploads', req.url);
-  const ext = path.extname(filePath).toLowerCase();
-  
-  // MIME type mapping
-  const mimeTypes = {
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.mov': 'video/quicktime',
-    '.wmv': 'video/x-ms-wmv',
-    '.avi': 'video/x-msvideo',
-    '.mp3': 'audio/mpeg',
-    '.ogg': 'audio/ogg',
-    '.wav': 'audio/wav',
-    '.m4a': 'audio/mp4',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.png': 'image/png',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-    '.pdf': 'application/pdf',
-    '.doc': 'application/msword',
-    '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    '.txt': 'text/plain'
-  };
-  
-  if (mimeTypes[ext]) {
-    res.setHeader('Content-Type', mimeTypes[ext]);
-  }
-  
-  // Headers for range requests (important for video/audio)
-  res.setHeader('Accept-Ranges', 'bytes');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  next();
-}, express.static(path.join(__dirname, 'uploads')));
+// Add OPTIONS handler for /upload endpoint
+app.options('/upload', cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (origin.endsWith('.ngrok-free.app')) return callback(null, true);
+    if (origin.startsWith('http://localhost:')) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin']
+}));
 
-// File upload endpoint
-app.post('/upload', (req, res) => {
-  upload.single('file')(req, res, function(err) {
-    if (err) {
-      console.error('Upload error:', err);
-      return res.status(500).json({ success: false, message: err.message });
-    }
-    
+// Update the upload endpoint with explicit CORS
+app.post('/upload', cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true);
+    if (origin.endsWith('.ngrok-free.app')) return callback(null, true);
+    if (origin.startsWith('http://localhost:')) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin']
+}), upload.single('file'), async (req, res) => {
+  try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'No file uploaded or file type not allowed' });
+      console.error('No file received in upload request');
+      return res.status(400).json({ message: 'No file uploaded' });
     }
     
-    // Log file details
-    console.log('File uploaded successfully:');
-    console.log('- Original name:', req.file.originalname);
-    console.log('- Saved as:', req.file.filename);
-    console.log('- Size:', req.file.size, 'bytes');
-    console.log('- MIME type:', req.file.mimetype);
-    
-    // Create URL for client
-    const fileUrl = `http://localhost:${PORT}/uploads/${req.file.filename}`;
-    
+    const filePath = req.file.path;
+    const ext = path.extname(req.file.filename).toLowerCase();
+    // Only convert audio files (webm, ogg, wav, m4a)
+    const audioExts = ['.webm', '.ogg', '.wav', '.m4a'];
+    if (audioExts.includes(ext)) {
+      // Convert to MP3
+      const mp3Filename = req.file.filename.replace(ext, '.mp3');
+      const mp3Path = path.join(path.dirname(filePath), mp3Filename);
+      await new Promise((resolve, reject) => {
+        ffmpeg(filePath)
+          .toFormat('mp3')
+          .on('end', resolve)
+          .on('error', reject)
+          .save(mp3Path);
+      });
+      // Optionally, delete the original file if you want
+      // fs.unlinkSync(filePath);
+      // Respond with the MP3 file URL
+      const fileUrl = `/uploads/${mp3Filename}`;
+      return res.json({
+        url: fileUrl,
+        filename: mp3Filename,
+        mimetype: 'audio/mp3'
+      });
+    }
+    // For non-audio files, just return as before
+    const fileUrl = `/uploads/${req.file.filename}`;
     res.json({
-      success: true,
-      fileUrl,
-      fileName: req.file.originalname,
-      fileType: req.file.mimetype
+      url: fileUrl,
+      filename: req.file.filename,
+      mimetype: req.file.mimetype
     });
-  });
+  } catch (error) {
+    console.error('Upload error:', error);
+    res.status(500).json({ message: 'Upload failed', error: error.message });
+  }
+});
+
+// Update the static file serving middleware
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, Range');
+    res.set('Accept-Ranges', 'bytes');
+    
+    // Set correct MIME type for images
+    const imageExtensions = {
+      '.png': 'image/png',
+      '.jpg': 'image/jpeg',
+      '.jpeg': 'image/jpeg',
+      '.gif': 'image/gif',
+      '.webp': 'image/webp',
+      '.svg': 'image/svg+xml'
+    };
+    const ext = filePath.toLowerCase().substring(filePath.lastIndexOf('.'));
+    if (imageExtensions[ext]) {
+      res.set('Content-Type', imageExtensions[ext]);
+      res.set('Cache-Control', 'public, max-age=31536000');
+    }
+
+    // Enhanced audio file handling with better MIME type detection
+    const audioExtensions = {
+      '.webm': 'audio/webm',
+      '.mp3': 'audio/mpeg',
+      '.wav': 'audio/wav',
+      '.ogg': 'audio/ogg',
+      '.m4a': 'audio/mp4',
+      '.aac': 'audio/aac',
+      '.flac': 'audio/flac'
+    };
+    if (audioExtensions[ext]) {
+      res.set('Content-Type', audioExtensions[ext]);
+      res.set('Cache-Control', 'public, max-age=31536000');
+      console.log(`Audio file requested: ${filePath} with MIME type: ${audioExtensions[ext]}`);
+    }
+    
+    // Handle files without extensions (check file content)
+    if (!ext || ext === path) {
+      // Try to detect audio files by reading first few bytes
+      const fs = require('fs');
+      const filePath = path.join(__dirname, 'uploads', path.substring(path.lastIndexOf('/') + 1));
+      
+      try {
+        if (fs.existsSync(filePath)) {
+          const buffer = fs.readFileSync(filePath, { start: 0, end: 12 });
+          
+          // Check for WebM signature
+          if (buffer.toString('hex').startsWith('1a45dfa3')) {
+            res.set('Content-Type', 'audio/webm');
+            console.log(`Detected WebM audio file: ${path}`);
+          }
+          // Check for MP3 signature
+          else if (buffer.toString('hex').startsWith('494433') || buffer.toString('hex').startsWith('fffb')) {
+            res.set('Content-Type', 'audio/mpeg');
+            console.log(`Detected MP3 audio file: ${path}`);
+          }
+          // Check for WAV signature
+          else if (buffer.toString('hex').startsWith('52494646')) {
+            res.set('Content-Type', 'audio/wav');
+            console.log(`Detected WAV audio file: ${path}`);
+          }
+          // Default to audio/webm for unknown audio files
+          else {
+            res.set('Content-Type', 'audio/webm');
+            console.log(`Defaulting to audio/webm for: ${path}`);
+          }
+          
+          res.set('Cache-Control', 'public, max-age=31536000');
+        }
+      } catch (error) {
+        console.log(`Error reading file for MIME detection: ${error.message}`);
+      }
+    }
+  }
+}));
+
+// Add a test endpoint for audio files
+app.get('/test-audio/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'uploads', filename);
+  
+  console.log(`Testing audio file: ${filename}`);
+  console.log(`Full path: ${filePath}`);
+  
+  if (fs.existsSync(filePath)) {
+    const stats = fs.statSync(filePath);
+    console.log(`File exists, size: ${stats.size} bytes`);
+    
+    // Set proper headers
+    res.set('Content-Type', 'audio/webm');
+    res.set('Access-Control-Allow-Origin', '*');
+    res.set('Accept-Ranges', 'bytes');
+    
+    // Send the file
+    res.sendFile(filePath);
+  } else {
+    console.log(`File not found: ${filePath}`);
+    res.status(404).json({ error: 'Audio file not found' });
+  }
+});
+
+// Add an endpoint to get audio in different formats for iOS compatibility
+app.get('/audio/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'uploads', filename);
+  const userAgent = req.headers['user-agent'] || '';
+  const isIOS = /iPad|iPhone|iPod/.test(userAgent);
+  const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
+  
+  console.log(`Audio request for: ${filename}, iOS: ${isIOS}, Safari: ${isSafari}`);
+  
+  if (fs.existsSync(filePath)) {
+    const stats = fs.statSync(filePath);
+    console.log(`File exists, size: ${stats.size} bytes`);
+    
+    // For iOS/Safari devices, serve with more compatible headers
+    if (isIOS || isSafari) {
+      if (filename.endsWith('.webm')) {
+        // Try to serve WebM as MP4 for iOS compatibility
+        res.set('Content-Type', 'audio/mp4');
+        console.log('Serving WebM as MP4 for iOS/Safari compatibility');
+      } else {
+        // Set content type based on file extension
+        const ext = path.extname(filename).toLowerCase();
+        const mimeTypes = {
+          '.webm': 'audio/webm',
+          '.mp3': 'audio/mpeg',
+          '.wav': 'audio/wav',
+          '.ogg': 'audio/ogg',
+          '.m4a': 'audio/mp4',
+          '.mp4': 'audio/mp4'
+        };
+        res.set('Content-Type', mimeTypes[ext] || 'audio/mp4');
+      }
+      
+      // Add additional headers for iOS compatibility
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Accept-Ranges', 'bytes');
+      res.set('Cache-Control', 'public, max-age=31536000');
+      res.set('X-Content-Type-Options', 'nosniff');
+      
+      // For iOS, try to force the browser to treat it as audio
+      if (isIOS) {
+        res.set('Content-Disposition', 'inline');
+      }
+    } else {
+      // Standard headers for other browsers
+      const ext = path.extname(filename).toLowerCase();
+      const mimeTypes = {
+        '.webm': 'audio/webm',
+        '.mp3': 'audio/mpeg',
+        '.wav': 'audio/wav',
+        '.ogg': 'audio/ogg',
+        '.m4a': 'audio/mp4',
+        '.mp4': 'audio/mp4'
+      };
+      res.set('Content-Type', mimeTypes[ext] || 'audio/webm');
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Accept-Ranges', 'bytes');
+      res.set('Cache-Control', 'public, max-age=31536000');
+    }
+    
+    // Send the file
+    res.sendFile(filePath);
+  } else {
+    console.log(`File not found: ${filePath}`);
+    res.status(404).json({ error: 'Audio file not found' });
+  }
+});
+
+// Add an endpoint to validate audio files
+app.get('/validate-audio/:filename', (req, res) => {
+  const filename = req.params.filename;
+  const filePath = path.join(__dirname, 'uploads', filename);
+  
+  console.log(`Validating audio file: ${filename}`);
+  
+  if (fs.existsSync(filePath)) {
+    const stats = fs.statSync(filePath);
+    console.log(`File exists, size: ${stats.size} bytes`);
+    
+    // Read first few bytes to check file signature
+    try {
+      const buffer = fs.readFileSync(filePath, { start: 0, end: 12 });
+      const hex = buffer.toString('hex');
+      
+      let format = 'unknown';
+      if (hex.startsWith('1a45dfa3')) {
+        format = 'webm';
+      } else if (hex.startsWith('494433') || hex.startsWith('fffb')) {
+        format = 'mp3';
+      } else if (hex.startsWith('52494646')) {
+        format = 'wav';
+      } else if (hex.startsWith('66747970')) {
+        format = 'mp4';
+      }
+      
+      res.json({
+        valid: true,
+        size: stats.size,
+        format: format,
+        path: filePath
+      });
+    } catch (error) {
+      console.error('Error reading file:', error);
+      res.status(500).json({ error: 'Error reading file' });
+    }
+  } else {
+    console.log(`File not found: ${filePath}`);
+    res.status(404).json({ error: 'Audio file not found' });
+  }
 });
 
 // Updated registration endpoint to handle existing users
@@ -418,7 +677,12 @@ app.post('/login', async (req, res) => {
   }
 });
 
-app.get('/verify/:token', cors(corsOptions), async (req, res) => {
+app.get('/verify/:token', cors({
+  origin: ['http://localhost:3000', 'http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}), async (req, res) => {
   const user = await User.findOne({ verificationToken: req.params.token });
   if (!user) {
     return res.status(400).send('Invalid verification token');
@@ -960,109 +1224,435 @@ app.post('/reset-password/:token', async (req, res) => {
 });
 
 // Socket.io event handlers
+// Helper to get username from socket or event
+function getUsername(socket, data) {
+  return socket.username || (data && data.username) || null;
+}
+
+// Robust joinRoom
 io.on('connection', (socket) => {
-  console.log('Client connected:', socket.id);
-  
-  // Register user with socket ID
-  socket.on('register', (userId) => {
-    userSocketMap.set(userId, socket.id);
-    console.log(`User ${userId} registered with socket ${socket.id}`);
+  console.log(`User connected: ${socket.id}`);
+
+  socket.on('joinInterestRoom', ({ username, interests }) => {
+    if (!Array.isArray(interests) || interests.length === 0) {
+      console.error(`Invalid interests for user ${username}:`, interests);
+      return;
+    }
+
+    let roomToJoin = null;
+
+    // Find if a room already exists for any of the user's interests.
+    for (const interest of interests) {
+      if (interestToRoomMap.has(interest)) {
+        roomToJoin = interestToRoomMap.get(interest);
+        break;
+      }
+    }
+
+    if (!roomToJoin) {
+      // No room found, create a new one.
+      roomToJoin = `interest-room-${crypto.randomBytes(8).toString('hex')}`;
+      console.log(`Creating new room ${roomToJoin} for user ${username} with interests: ${interests}`);
+    } else {
+      console.log(`User ${username} found existing room ${roomToJoin} for interests: ${interests}`);
+    }
+    
+    socket.join(roomToJoin);
+
+    // Update the map so all of the new user's interests point to this room.
+    for (const interest of interests) {
+      interestToRoomMap.set(interest, roomToJoin);
+    }
+    
+    // Let the client know which room they've been assigned to.
+    socket.emit('interestRoomAssigned', { roomName: roomToJoin });
+    
+    const room = io.sockets.adapter.rooms.get(roomToJoin);
+    if (room) {
+      io.to(roomToJoin).emit('interestRoomUserCount', { count: room.size });
+    }
+  });
+
+  socket.on('leaveInterestRoom', ({ username, roomName }) => {
+    if (!roomName) return; 
+    
+    socket.leave(roomName);
+    console.log(`${username} left interest room: ${roomName}`);
+    const room = io.sockets.adapter.rooms.get(roomName);
+    const userCount = room ? room.size : 0;
+    
+    if (room) {
+      io.to(roomName).emit('interestRoomUserCount', { count: userCount });
+    }
+
+    if (userCount === 0) {
+      console.log(`Room ${roomName} is empty. Cleaning up interest map.`);
+      for (const [interest, mappedRoom] of interestToRoomMap.entries()) {
+        if (mappedRoom === roomName) {
+          interestToRoomMap.delete(interest);
+        }
+      }
+    }
+  });
+
+  socket.on('sendInterestMessage', (msg) => {
+    // Ensure msg has id and likes
+    if (!msg.id) msg.id = Date.now() + Math.random().toString(36).substr(2, 9);
+    if (!msg.likes) msg.likes = [];
+    io.to(msg.roomName).emit('receiveInterestMessage', msg);
+  });
+
+  socket.on('likeInterestMessage', ({ roomName, msgId, username }) => {
+    console.log('Received likeInterestMessage:', roomName, msgId, username); // Debug log
+    const room = activeRooms.get(roomName);
+    if (room && room.messages) {
+      const msg = room.messages.find(m => m.id === msgId);
+      console.log('Found message:', msg); // Debug log
+      if (msg) {
+        msg.likes = msg.likes || [];
+        if (!msg.likes.includes(username)) {
+          msg.likes.push(username);
+        } else {
+          // Optionally, allow unliking
+          msg.likes = msg.likes.filter(u => u !== username);
+        }
+        io.to(roomName).emit('interestMessageLiked', { msgId, likes: msg.likes });
+      }
+    }
+  });
+
+  // --- Private Room Logic ---
+  socket.on('register', (username) => {
+    userSocketMap.set(socket.id, username);
+    socketToUserMap.set(socket.id, username); // Map socket ID to username
+    console.log(`User ${username} registered with socket ID ${socket.id}`);
+  });
+
+  // Add connection error logging
+  socket.on('error', (error) => {
+    console.error(`Socket error for ${socket.id}:`, error);
+  });
+
+  // Add reconnection logging
+  socket.on('reconnect_attempt', (attemptNumber) => {
+    console.log(`Socket ${socket.id} attempting to reconnect (attempt ${attemptNumber})`);
+  });
+
+  // Add disconnection logging with reason
+  socket.on('disconnect', (reason) => {
+    console.log(`Socket ${socket.id} disconnected. Reason: ${reason}`);
+    
+    // Remove from all rooms
+    for (const [userId, socketId] of userSocketMap.entries()) {
+      if (socketId === socket.id) {
+        userSocketMap.delete(userId);
+        socketToUserMap.delete(socket.id); // Remove from socketToUserMap
+        console.log(`Removed user ${userId} from socket mapping`);
+        break;
+      }
+    }
   });
   
-  // Join room
-  socket.on('joinRoom', ({ room, username }) => {
-    socket.join(room);
+  // Create room
+  socket.on('createRoom', (username, callback) => {
+    const roomCode = generateRoomCode();
     
     // Create room if doesn't exist
-    if (!activeRooms.has(room)) {
-      activeRooms.set(room, {
-        name: room,
-        users: []
-      });
-    }
-    
-    // Add user to room
-    const roomData = activeRooms.get(room);
-    if (!roomData.users.includes(username)) {
-      roomData.users.push(username);
-    }
-    
-    console.log(`${username} joined room: ${room}`);
-    
-    // Notify room of new user
-    socket.to(room).emit('userJoined', { room, username });
-    
-    // Send room users to everyone
-    io.to(room).emit('roomUsers', {
-      room,
-      users: roomData.users
+    activeRooms.set(roomCode, {
+      name: roomCode,
+      users: [username],
+      messages: [] // Initialize messages array
     });
+    
+    // Join socket to room
+    socket.join(roomCode);
+    
+    console.log(`Room ${roomCode} created by ${username}`);
+    callback(roomCode);
   });
   
-  // Leave room
-  socket.on('leaveRoom', ({ room, username }) => {
-    socket.leave(room);
+  // Join room request
+  socket.on('joinRoom', ({ roomCode, username }) => {
+    console.log(`Join request received for room ${roomCode} from ${username}`);
+    const room = activeRooms.get(roomCode);
     
-    if (activeRooms.has(room)) {
-      const roomData = activeRooms.get(room);
-      const index = roomData.users.indexOf(username);
-      
-      if (index !== -1) {
-        roomData.users.splice(index, 1);
-      }
-      
-      // Remove empty rooms
-      if (roomData.users.length === 0) {
-        activeRooms.delete(room);
-      } else {
-        // Notify room of user leaving
-        io.to(room).emit('userLeft', { room, username });
-        
-        // Update user list
-        io.to(room).emit('roomUsers', {
-          room,
-          users: roomData.users
-        });
-      }
+    if (!room) {
+      console.log(`Room ${roomCode} not found`);
+      socket.emit('joinError', { message: 'Room not found' });
+      return;
     }
     
-    console.log(`${username} left room: ${room}`);
+    // Allow direct room access
+    console.log(`Allowing ${username} to join room ${roomCode}`);
+    socket.join(roomCode);
+    
+    // Add user to room if not already present
+    if (!room.users.includes(username)) {
+      room.users.push(username);
+    }
+    
+    // Send room history to the user
+    socket.emit("roomHistory", { messages: room.messages || [] });
+    
+    // Notify room of new user
+    io.in(roomCode).emit("userJoined", { 
+      username,
+      users: room.users
+    });
+    
+    // Send room users to everyone
+    io.in(roomCode).emit("roomUsers", {
+      room: roomCode,
+      users: room.users
+    });
   });
   
   // Handle messages including attachments
   socket.on('sendMessage', (message) => {
-    console.log(`Message received from ${message.sender} in room ${message.room}`);
+    console.log(`Message received from ${message.username} in room ${message.roomCode}`);
     
-    if (message.type && message.type !== 'text') {
-      console.log(`Message contains ${message.type}: ${message.content}`);
+    // Store message in room history
+    const room = activeRooms.get(message.roomCode);
+    if (room) {
+      if (!room.messages) {
+        room.messages = [];
+      }
+      room.messages.push(message);
     }
     
-    // Broadcast to everyone in the room
-    io.to(message.room).emit('message', message);
+    // Broadcast to everyone in the room including sender
+    io.in(message.roomCode).emit('receiveMessage', message);
   });
   
   // Typing indicator
   socket.on('typing', ({ room, username, isTyping }) => {
     socket.to(room).emit('userTyping', { username, isTyping });
   });
-  
-  // Disconnect
-  socket.on('disconnect', () => {
-    console.log('User disconnected:', socket.id);
+
+  // Voice Call Handlers - Enhanced for room-wide calls
+  socket.on('callRequest', ({ roomCode, from, participants }) => {
+    console.log(`Call request from ${from} in room ${roomCode} with participants:`, participants);
     
-    // Remove from all rooms
-    for (const [userId, socketId] of userSocketMap.entries()) {
-      if (socketId === socket.id) {
-        userSocketMap.delete(userId);
-        break;
+    // Store call state for the room
+    if (!activeRooms.has(roomCode)) {
+      activeRooms.set(roomCode, { users: [], callState: 'idle', callInitiator: null });
+    }
+    
+    const room = activeRooms.get(roomCode);
+    room.callState = 'ringing';
+    room.callInitiator = from;
+    room.callParticipants = participants || [];
+    
+    // Send call request to all users in the room except the caller
+    socket.to(roomCode).emit('callRequest', { 
+      from, 
+      roomCode, 
+      participants,
+      callType: 'voice', // Indicate this is a voice call
+      message: `${from} is starting a voice call. Join the call?`
+    });
+    
+    console.log(`Call notification sent to room ${roomCode}`);
+  });
+
+  socket.on('callAccepted', ({ from, roomCode }) => {
+    console.log(`Call accepted by ${from} in room ${roomCode}`);
+    
+    const room = activeRooms.get(roomCode);
+    if (room) {
+      // Add user to call participants if not already there
+      if (!room.callParticipants.includes(from)) {
+        room.callParticipants.push(from);
+      }
+      
+      // If this is the first acceptance, change call state to connected
+      if (room.callState === 'ringing' && room.callParticipants.length > 1) {
+        room.callState = 'connected';
+      }
+    }
+    
+    // Notify all users in the room about the acceptance
+    io.in(roomCode).emit('callAccepted', { 
+      from, 
+      roomCode,
+      callParticipants: room?.callParticipants || [],
+      callState: room?.callState || 'connected'
+    });
+    
+    // Notify all participants that someone joined the call
+    io.in(roomCode).emit('userJoinedCall', { 
+      username: from, 
+      roomCode,
+      callParticipants: room?.callParticipants || []
+    });
+  });
+
+  socket.on('callRejected', ({ from, roomCode }) => {
+    console.log(`Call rejected by ${from} in room ${roomCode}`);
+    
+    // Notify the call initiator that their call was rejected
+    const room = activeRooms.get(roomCode);
+    if (room && room.callInitiator) {
+      socket.to(room.callInitiator).emit('callRejected', { from, roomCode });
+    }
+  });
+
+  socket.on('callEnded', ({ roomCode, from }) => {
+    console.log(`Call ended by ${from} in room ${roomCode}`);
+    
+    // Reset call state for the room
+    const room = activeRooms.get(roomCode);
+    if (room) {
+      room.callState = 'idle';
+      room.callInitiator = null;
+      room.callParticipants = [];
+    }
+    
+    // Notify all users in the room that the call has ended
+    io.in(roomCode).emit('callEnded', { 
+      from, 
+      roomCode,
+      message: `${from} ended the voice call`
+    });
+  });
+
+  // Robust userJoinedCall
+  socket.on('userJoinedCall', ({ username, roomCode }) => {
+    const room = activeRooms.get(roomCode);
+    if (room) {
+      if (!Array.isArray(room.callParticipants)) room.callParticipants = [];
+      if (!room.callParticipants.includes(username)) {
+        room.callParticipants.push(username);
+        io.in(roomCode).emit('userJoinedCall', { username, roomCode, callParticipants: room.callParticipants });
+        io.in(roomCode).emit('roomParticipants', { participants: room.users, callParticipants: room.callParticipants });
       }
     }
   });
 
-  socket.on("createRoom", (username, callback) => {
-    // Logic to create a room
-    const roomCode = generateRoomCode(); // Your logic to generate a room code
-    callback(roomCode); // Send the room code back to the client
+  // Robust userLeftCall
+  function handleLeaveCall(username, roomCode) {
+    const room = activeRooms.get(roomCode);
+    if (room) {
+      room.callParticipants = room.callParticipants.filter(u => u !== username);
+      io.in(roomCode).emit('userLeftCall', { username, roomCode, callParticipants: room.callParticipants });
+      io.in(roomCode).emit('roomParticipants', { participants: room.users, callParticipants: room.callParticipants });
+      if (room.callParticipants.length === 0) {
+        room.callState = 'idle';
+        room.callInitiator = null;
+      }
+    }
+  }
+  socket.on('userLeftCall', ({ username, roomCode }) => handleLeaveCall(username, roomCode));
+
+  // WebRTC Signaling
+  socket.on('offer', ({ to, offer }) => {
+    console.log(`Offer from ${socket.id} to ${to}`);
+    socket.to(to).emit('offer', { from: socket.id, offer });
+  });
+
+  socket.on('answer', ({ to, answer }) => {
+    console.log(`Answer from ${socket.id} to ${to}`);
+    socket.to(to).emit('answer', { from: socket.id, answer });
+  });
+
+  socket.on('iceCandidate', ({ to, candidate }) => {
+    console.log(`ICE candidate from ${socket.id} to ${to}`);
+    socket.to(to).emit('iceCandidate', { from: socket.id, candidate });
+  });
+
+  socket.on('videoStateChanged', ({ roomCode, username, isVideoEnabled }) => {
+    console.log(`${username} ${isVideoEnabled ? 'enabled' : 'disabled'} video in room ${roomCode}`);
+    socket.to(roomCode).emit('videoStateChanged', { username, isVideoEnabled });
+  });
+
+  // Get room participants with call state
+  socket.on('getRoomParticipants', ({ roomCode }) => {
+    const room = activeRooms.get(roomCode);
+    if (room && room.users) {
+      socket.emit('roomParticipants', { 
+        participants: room.users,
+        callState: room.callState || 'idle',
+        callInitiator: room.callInitiator,
+        callParticipants: room.callParticipants || []
+      });
+    } else {
+      socket.emit('roomParticipants', { 
+        participants: [],
+        callState: 'idle',
+        callInitiator: null,
+        callParticipants: []
+      });
+    }
+  });
+
+  // Get current call state for a room
+  socket.on('getCallState', ({ roomCode }) => {
+    const room = activeRooms.get(roomCode);
+    if (room) {
+      socket.emit('callState', {
+        roomCode,
+        callState: room.callState || 'idle',
+        callInitiator: room.callInitiator,
+        callParticipants: room.callParticipants || []
+      });
+    } else {
+      socket.emit('callState', {
+        roomCode,
+        callState: 'idle',
+        callInitiator: null,
+        callParticipants: []
+      });
+    }
+  });
+
+  // Get socket ID for a username
+  socket.on('getSocketId', ({ username }, callback) => {
+    // Find the socket ID for the given username
+    for (const [socketId, userData] of userSocketMap.entries()) {
+      if (userData.username === username) {
+        callback({ socketId });
+        return;
+      }
+    }
+    callback({ socketId: null });
+  });
+
+  // Get username for a socket ID
+  socket.on('getUsername', ({ socketId }, callback) => {
+    const username = socketToUserMap.get(socketId);
+    callback({ username });
+  });
+});
+
+// --- Mesh WebRTC Signaling for Voice Calls ---
+const meshRooms = {};
+
+io.on('connection', socket => {
+  socket.on('join', room => {
+    socket.join(room);
+    meshRooms[room] = meshRooms[room] || [];
+    meshRooms[room].push(socket.id);
+
+    // Send the list of peers to the new user
+    io.to(socket.id).emit('peers', { peers: meshRooms[room].filter(id => id !== socket.id) });
+
+    // Notify others in the room about the new peer
+    socket.to(room).emit('new-peer', { peerId: socket.id });
+
+    // Emit user count to all in the room
+    io.to(room).emit('user-count', meshRooms[room].length);
+
+    // Relay signals
+    socket.on('signal', ({ to, data }) => {
+      io.to(to).emit('signal', { from: socket.id, data });
+    });
+
+    // Clean up on disconnect
+    socket.on('disconnect', () => {
+      meshRooms[room] = (meshRooms[room] || []).filter(id => id !== socket.id);
+      io.to(room).emit('user-count', meshRooms[room].length);
+      if (meshRooms[room].length === 0) delete meshRooms[room];
+    });
   });
 });
 
@@ -1148,9 +1738,154 @@ app.post("/api/chatbot", async (req, res) => {
   }
 });
 
+// AI-powered icebreaker endpoint (now using Gemini)
+app.post('/api/icebreaker', async (req, res) => {
+  const { interests } = req.body;
+  const prompt = `Give me only one fun, safe, and friendly icebreaker question for a chat between strangers who are interested in: ${interests && interests.length ? interests.join(', ') : 'anything'}. Do not include any preamble or explanation, just output the question itself.`;
+  try {
+    const geminiApiKey = process.env.GEMINI_API_KEY || 'AIzaSyBE1TKKXkdvk954EF71aTc7TluqckTIjfs';
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ]
+      }
+    );
+    const aiIcebreaker = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "What's something interesting about your favorite hobby?";
+    res.json({ icebreaker: aiIcebreaker });
+  } catch (err) {
+    res.json({ icebreaker: "What's something interesting about your favorite hobby?" });
+  }
+});
+
+// Gemini API test endpoint
+app.post('/api/gemini', async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt is required.' });
+  }
+  try {
+    const geminiApiKey = process.env.GEMINI_API_KEY || 'AIzaSyBE1TKKXkdvk954EF71aTc7TluqckTIjfs';
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ]
+      }
+    );
+    const geminiText = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.';
+    res.json({ reply: geminiText });
+  } catch (error) {
+    console.error('Gemini API error:', error.response?.data || error.message);
+    res.status(500).json({ error: 'Failed to get response from Gemini.' });
+  }
+});
+
+// AI suggestion endpoint (Gemini)
+app.post('/api/ai-suggest-reply', async (req, res) => {
+  const { selected_message, chat_history, participants, interests } = req.body;
+  // Compose a prompt for Gemini
+  const prompt = `You are WingmanAI, a helpful assistant for chat conversations.\nGiven the following conversation in an interest-based chat room, answer from the perspective of the user who is asking (not as an outsider or general AI).\nUse the chat history and the user's interests to make your reply relevant and personal.\n\nConversation history:\n${(chat_history || []).join('\n')}\n\nLast message from user: '${selected_message}'\nParticipants: ${(participants || []).join(', ')}.\nInterests: ${(interests || []).join(', ')}.\n\nSuggest a smart, friendly, and engaging reply to keep the conversation going. Make it relevant to the interests. Be helpful, positive, and natural.\nJust output the reply, no preamble or explanation.`;
+
+  try {
+    const geminiApiKey = process.env.GEMINI_API_KEY || 'AIzaSyBE1TKKXkdvk954EF71aTc7TluqckTIjfs';
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ]
+      }
+    );
+    const suggestion = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "Could not generate a suggestion.";
+    res.json({ suggestion });
+  } catch (err) {
+    res.json({ suggestion: "Could not generate a suggestion." });
+  }
+});
+
+// Gemini open chat endpoint
+app.post('/api/gemini-chat', async (req, res) => {
+  const { prompt } = req.body;
+  if (!prompt) {
+    return res.status(400).json({ error: 'Prompt is required.' });
+  }
+  try {
+    const geminiApiKey = process.env.GEMINI_API_KEY || 'AIzaSyBE1TKKXkdvk954EF71aTc7TluqckTIjfs';
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ]
+      }
+    );
+    const chatResponse = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.';
+    res.json({ response: chatResponse });
+  } catch (error) {
+    res.status(500).json({ response: 'Could not generate a response.' });
+  }
+});
+
+// Compatibility Meter endpoint (Gemini)
+app.post('/api/compatibility-meter', async (req, res) => {
+  const { chat_history, user1_interests, user2_interests } = req.body;
+  const prompt = `Analyze the following chat conversation between two users. Based on their shared interests, the tone of their messages, and how well they engaged with each other, give a compatibility score from 0 to 100 and a short, fun label (like “Perfect Vibe!” or “Great Match!”).\n\nChat history:\n${(chat_history || []).join('\n')}\n\nUser 1 interests: ${(user1_interests || []).join(', ')}\nUser 2 interests: ${(user2_interests || []).join(', ')}\n\nRespond in this format:\nScore: [number]%\nLabel: [short phrase]\nReason: [one-sentence explanation]`;
+
+  try {
+    const geminiApiKey = process.env.GEMINI_API_KEY || 'YOUR_GEMINI_API_KEY';
+    const response = await axios.post(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${geminiApiKey}`,
+      {
+        contents: [
+          {
+            role: "user",
+            parts: [{ text: prompt }]
+          }
+        ]
+      }
+    );
+    const result = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || "Could not generate a compatibility score.";
+    res.json({ result });
+  } catch (err) {
+    res.json({ result: "Could not generate a compatibility score." });
+  }
+});
 
 app.get("/favicon.ico", (req, res) => {
   res.status(204).send();
+});
+
+// --- CORS middleware for audio files (MOBILE/iOS SAFE) ---
+app.use(['/uploads', '/audio'], (req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS, HEAD');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, Range');
+  res.set('Accept-Ranges', 'bytes');
+  next();
+});
+
+// Explicit OPTIONS handler for /uploads/* and /audio/* (for mobile/iOS CORS)
+app.options(['/uploads/*', '/audio/*'], (req, res) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, OPTIONS, HEAD');
+  res.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, Origin, Range');
+  res.set('Accept-Ranges', 'bytes');
+  res.sendStatus(200);
 });
 
 const startServer = async () => {
