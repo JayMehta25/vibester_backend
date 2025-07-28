@@ -34,6 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve static files from the React app build directory
 app.use(express.static(path.join(__dirname, 'client/build')));
 // Allow CORS for all origins (reflect origin for credentials)
 app.use(cors({
@@ -173,9 +174,6 @@ app.use((req, res, next) => {
 
 // Serve static files from the 'uploads' directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
-
-// Serve static files from the React app (if applicable)
-app.use(express.static(path.join(__dirname, 'client/build')));
 
 // File upload configuration
 const storage = multer.diskStorage({
@@ -1666,9 +1664,9 @@ app.get('/', (req, res) => {
   res.status(200).json({ message: 'Backend is running!' });
 });
 
-// Catch-all handler for any request that doesn't match above
+// Catch-all: send back React's index.html for any other route
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'client/build/index.html')); // Serve your React app
+  res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
 });
 
 // Initialize the NLP Manager
