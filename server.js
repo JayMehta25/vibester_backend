@@ -34,9 +34,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Allow CORS for your frontend domain
+// Allow CORS for all origins
 app.use(cors({
-  origin: 'https://e17e65f5131c.ngrok-free.app',
+  origin: '*',
   credentials: true
 }));
 
@@ -240,12 +240,7 @@ const upload = multer({
 
 // Add OPTIONS handler for /upload endpoint
 app.options('/upload', cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (origin.endsWith('.ngrok-free.app')) return callback(null, true);
-    if (origin.startsWith('http://localhost:')) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin']
@@ -253,12 +248,7 @@ app.options('/upload', cors({
 
 // Update the upload endpoint with explicit CORS
 app.post('/upload', cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true);
-    if (origin.endsWith('.ngrok-free.app')) return callback(null, true);
-    if (origin.startsWith('http://localhost:')) return callback(null, true);
-    callback(new Error('Not allowed by CORS'));
-  },
+  origin: '*',
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin']
