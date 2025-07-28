@@ -34,9 +34,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Allow CORS for all origins
+// Allow CORS for all origins (reflect origin for credentials)
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    callback(null, origin);
+  },
   credentials: true
 }));
 
@@ -52,9 +54,11 @@ const io = new Server(server, {
   path: '/socket.io/'
 });
 
-// CORS configuration (allow all origins for global access)
+// CORS configuration (allow all origins for global access, reflect origin for credentials)
 app.use(cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    callback(null, origin);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin']
@@ -240,7 +244,9 @@ const upload = multer({
 
 // Add OPTIONS handler for /upload endpoint
 app.options('/upload', cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    callback(null, origin);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin']
@@ -248,7 +254,9 @@ app.options('/upload', cors({
 
 // Update the upload endpoint with explicit CORS
 app.post('/upload', cors({
-  origin: '*',
+  origin: (origin, callback) => {
+    callback(null, origin);
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin']
