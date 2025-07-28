@@ -34,6 +34,7 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(express.static(path.join(__dirname, 'client/build')));
 // Allow CORS for all origins (reflect origin for credentials)
 app.use(cors({
   origin: (origin, callback) => {
